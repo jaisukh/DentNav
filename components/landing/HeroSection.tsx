@@ -159,13 +159,13 @@ export function HeroSection() {
             </p>
 
             <div className="pt-8">
-              <h1 className="max-w-[550px] font-display text-xl font-bold leading-[1.09] tracking-[-1.2px] text-dent-ink sm:text-xl lg:text-[64px] lg:leading-[70px]">
+              <h1 className="max-w-[620px] font-display text-xl font-bold leading-[1.09] tracking-[-1.2px] text-dent-ink sm:text-xl lg:text-[64px] lg:leading-[70px]">
                 Your Journey to Practicing{" "}
-                <span className="text-dent-sky">Dentistry</span> in the USA Starts Here
+                <span className="text-dent-sky">Dentistry</span> in the United States Starts Here
               </h1>
             </div>
 
-            <div className="max-w-[555px] pt-8">
+            <div className="max-w-[600px] pt-8">
               <p className="text-xl font-normal leading-7 text-[#475569]">
                 DentNav helps foreign-trained dentists navigate the complex pathway to U.S. dental careers with clarity,strategy and confidence.
               </p>
@@ -224,7 +224,7 @@ export function HeroSection() {
             </div>
           </div>
 
-          <div className="relative z-[2] flex h-full min-h-[min(520px,78vh)] w-full max-w-[min(100%,920px)] items-center justify-center self-stretch px-1 py-8 sm:px-2 lg:min-h-[min(640px,82vh)] lg:min-h-0 lg:-translate-y-6 lg:py-0">
+          <div className="relative z-[2] flex left-[8%] h-full min-h-[min(520px,78vh)] w-full max-w-[min(100%,920px)] items-center justify-center self-stretch px-1 py-8 sm:px-2 lg:min-h-[min(640px,82vh)] lg:min-h-0 lg:-translate-y-6 lg:py-0">
             <Cubes
               className="cubes--hero"
               gridCols={6}
@@ -254,7 +254,7 @@ export function HeroSection() {
             title="CAAPID & programs"
             description="Strong files, timelines, and school fit."
             tags={["CAAPID", "Personal statement", "LORs"]}
-            className="absolute left-[38%] top-[8%] max-w-[min(224px,21vw)]"
+            className="absolute left-[48%] top-[8%] max-w-[min(224px,21vw)]"
           />
 
           {/* 2 — top right; card centre ≈ cube's right edge */}
@@ -265,7 +265,7 @@ export function HeroSection() {
             title="Immigration pathways"
             description="Common dentist-relevant routes."
             tags={["EB1", "O1", "H1B", "F1", "J1"]}
-            className="absolute right-[5%] top-[5%] max-w-[min(224px,21vw)]"
+            className="absolute right-[3%] top-[2%] max-w-[min(224px,21vw)]"
           />
 
           {/* 3 — vertically centred in the column gap */}
@@ -273,9 +273,9 @@ export function HeroSection() {
             accent="violet"
             eyebrow="Education tracks"
             title="Advanced Standing DDS"
-            description="GPR, AEGD, and specialty bridge planning."
+            description="GPR, AEGD, and bridge planning."
             tags={["AS-DDS", "GPR", "AEGD"]}
-            className="absolute left-[46%] top-[52%] max-w-[min(224px,21vw)] -translate-y-1/2"
+            className="absolute left-[53%] top-[52%] max-w-[min(260px,21vw)] -translate-y-1/2"
           />
 
           {/* 4 — below the cube */}
@@ -286,7 +286,7 @@ export function HeroSection() {
             title="INBDE → state license"
             description="High-stakes tests and what comes next."
             tags={["INBDE", "Bench tests", "State boards"]}
-            className="absolute bottom-[5%] left-[80%] max-w-[min(224px,21vw)] -translate-x-1/2"
+            className="absolute bottom-[3%] left-[75%] max-w-[min(224px,21vw)] "
           />
         </div>
       </div>
