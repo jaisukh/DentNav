@@ -1,0 +1,192 @@
+{
+  "id": "dentnav-assessment-v1",
+  "title": "Tell Us About Yourself",
+  "subtitle": "Map your path to US dental practice in 3 minutes.",
+  "questions": [
+    {
+      "id": "q1-degree-background",
+      "order": 1,
+      "type": "textarea",
+      "rows": 2,
+      "label": "Are you a foreign / Indian-trained dentist with a dental degree?",
+      "description": "BDS / DDS / Other (please specify degree & country where you pursued education). Examples: BChD / UK; BDS / India; BScD / Spain.",
+      "placeholder": "e.g. BDS / India; DDS / Philippines"
+    },
+    {
+      "id": "q2-target-program",
+      "order": 2,
+      "type": "dropdown",
+      "label": "Which dental program do you want to pursue in the USA?",
+      "placeholder": "Select a program",
+      "options": [
+        "DDS / DMD",
+        "Specialty",
+        "AEGD",
+        "GPR",
+        "I don't know (need guidance)"
+      ]
+    },
+    {
+      "id": "q3-practice-states",
+      "order": 3,
+      "type": "multiSelect",
+      "label": "Do you have any US state preferences where you want to practice dentistry?",
+      "description": "Select up to 3 states.",
+      "placeholder": "Add a state",
+      "maxSelections": 3,
+      "options": [
+        "Alabama",
+        "Alaska",
+        "Arizona",
+        "Arkansas",
+        "California",
+        "Colorado",
+        "Connecticut",
+        "Delaware",
+        "Florida",
+        "Georgia",
+        "Hawaii",
+        "Idaho",
+        "Illinois",
+        "Indiana",
+        "Iowa",
+        "Kansas",
+        "Kentucky",
+        "Louisiana",
+        "Maine",
+        "Maryland",
+        "Massachusetts",
+        "Michigan",
+        "Minnesota",
+        "Mississippi",
+        "Missouri",
+        "Montana",
+        "Nebraska",
+        "Nevada",
+        "New Hampshire",
+        "New Jersey",
+        "New Mexico",
+        "New York",
+        "North Carolina",
+        "North Dakota",
+        "Ohio",
+        "Oklahoma",
+        "Oregon",
+        "Pennsylvania",
+        "Rhode Island",
+        "South Carolina",
+        "South Dakota",
+        "Tennessee",
+        "Texas",
+        "Utah",
+        "Vermont",
+        "Virginia",
+        "Washington",
+        "West Virginia",
+        "Wisconsin",
+        "Wyoming"
+      ]
+    },
+    {
+      "id": "q4-visa",
+      "order": 4,
+      "type": "dropdown",
+      "label": "Do you hold any sort of visa?",
+      "placeholder": "Select visa status",
+      "options": [
+        "B1/B2",
+        "F1",
+        "F2",
+        "H1",
+        "H4",
+        "L1",
+        "L2",
+        "Green Card",
+        "Citizen",
+        "Asylum",
+        "None"
+      ]
+    },
+    {
+      "id": "q5-masters-vs-home",
+      "order": 5,
+      "type": "dropdown",
+      "label": "Are you willing to pursue a master's in the USA (such as MPH, MBA, etc.) or apply to US dental schools from your home country?",
+      "placeholder": "Choose an option",
+      "options": [
+        "Pursue master's degree",
+        "Apply to dental schools from home country"
+      ]
+    },
+    {
+      "id": "q6-loan-cosigner",
+      "order": 6,
+      "type": "radio",
+      "label": "Do you know any friends or family who has a Green Card or is a Citizen who can cosign your education loan?",
+      "options": ["Yes", "No"]
+    },
+    {
+      "id": "q7-clinical-years",
+      "order": 7,
+      "type": "dropdown",
+      "label": "How many years of clinical experience do you have in your home country?",
+      "placeholder": "Select range",
+      "options": [
+        "0-1",
+        "1-2",
+        "2-3",
+        "3-4",
+        "4-5",
+        "5-6",
+        "6-7",
+        "7-8",
+        "8-9",
+        "9-10",
+        "10-11",
+        "11-12",
+        "12-13",
+        "13-14",
+        "14-15"
+      ]
+    },
+    {
+      "id": "q8-inbde",
+      "order": 8,
+      "type": "radio",
+      "label": "Have you passed the INBDE?",
+      "options": ["Yes", "No"]
+    },
+    {
+      "id": "q9-toefl",
+      "order": 9,
+      "type": "dropdown",
+      "label": "English proficiency — TOEFL (total score band)",
+      "placeholder": "Select score",
+      "options": ["2", "2.5", "3", "3.5", "4", "4.5", "5"]
+    },
+    {
+      "id": "q10-start-cycle",
+      "order": 10,
+      "type": "dropdown",
+      "label": "Target start cycle",
+      "placeholder": "Select cycle",
+      "options": [
+        "2026",
+        "2027",
+        "2028",
+        "2029",
+        "2030",
+        "2031",
+        "2032",
+        "2033",
+        "2034",
+        "2035",
+        "2036",
+        "2037",
+        "2038",
+        "2039",
+        "2040"
+      ]
+    }
+  ]
+}

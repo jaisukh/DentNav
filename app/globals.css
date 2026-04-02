@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+:root {
+  --page-bg: #f8f9ff;
+  --dent-ink: #0c1a3a;
+  --dent-sky: #0ea5e9;
+  --dent-deep: #006591;
+  --dent-sky-light: #9ce0ff;
+  --dent-surface-bento: #f8fcff;
+  --dent-badge-bg: #eff4ff;
+  --background: #f8f9ff;
+  --foreground: #0c1a3a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-plus-jakarta);
+  --color-dent-ink: var(--dent-ink);
+  --color-dent-sky: var(--dent-sky);
+  --color-dent-deep: var(--dent-deep);
+  --color-dent-sky-light: var(--dent-sky-light);
+  --color-dent-surface-bento: var(--dent-surface-bento);
+  --color-dent-badge-bg: var(--dent-badge-bg);
+  --color-dent-navy: var(--dent-ink);
+  --color-dent-blue: var(--dent-sky);
+  --color-dent-cyan: var(--dent-sky-light);
+  --color-dent-teal: var(--dent-sky);
+  --color-dent-muted: #64748b;
+  --color-dent-surface: var(--dent-surface-bento);
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--foreground);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+/* Full-width container with consistent breathing room */
+@utility page-shell {
+  @apply mx-auto w-full max-w-[1536px] px-6 sm:px-8 lg:px-12;
+}
+
+@keyframes marquee-ltr {
+  from {
+    transform: translateX(-50%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-marquee-ltr {
+  display: flex;
+  width: max-content;
+  animation: marquee-ltr 20s linear infinite;
+}
