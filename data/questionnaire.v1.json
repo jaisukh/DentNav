@@ -1,7 +1,7 @@
 {
   "id": "dentnav-assessment-v1",
   "title": "Tell Us About Yourself",
-  "subtitle": "Map your path to US dental practice in 3 minutes.",
+  "subtitle": "Get a Personalized Roadmap matching your Profile",
   "questions": [
     {
       "id": "q1-degree-background",

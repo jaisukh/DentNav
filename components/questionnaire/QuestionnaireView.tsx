@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { BrandLogo } from "@/components/landing/BrandLogo";
 import { getQuestionnaire } from "@/lib/questionnaire-loader";
@@ -20,6 +21,7 @@ function isAnswerComplete(q: Question, val: AnswerValue | undefined): boolean {
 }
 
 export function QuestionnaireView() {
+  const router = useRouter();
   const doc = useMemo(() => getQuestionnaire(), []);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
 
@@ -36,7 +38,7 @@ export function QuestionnaireView() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("questionnaire_submit", answers);
+    router.push("/analysis");
   };
 
   return (
@@ -52,13 +54,13 @@ export function QuestionnaireView() {
               href="/auth/login"
               className="text-xs font-semibold leading-[18px] text-slate-500 transition-colors hover:text-slate-700"
             >
-              Sign In
+              Logout
             </Link>
             <Link
-              href="/questionnaire"
+              href="/"
               className="flex cursor-pointer flex-col items-center justify-center rounded-full bg-sky-500 px-4 py-1.5 text-xs font-bold leading-[18px] text-white no-underline transition-opacity hover:opacity-90"
             >
-              Check Eligibility
+              Home
             </Link>
           </div>
         </div>
