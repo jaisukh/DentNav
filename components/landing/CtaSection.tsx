@@ -23,12 +23,16 @@ export function CtaSection() {
             Explore all pathways built by U.S. licensed dentists. Step-by-step guidance to the very end.
           </p>
           <div className="flex w-full flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link
-              href="/questionnaire"
-              className="relative isolate inline-flex items-center justify-center rounded-full bg-[linear-gradient(99.11deg,#006591_0%,#0EA5E9_100%)] px-10 py-5 text-base font-bold leading-6 text-white shadow-[0_20px_25px_-5px_rgba(0,101,145,0.25),0_8px_10px_-6px_rgba(0,101,145,0.2)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_25px_30px_-5px_rgba(0,101,145,0.25)] active:scale-[0.98]"
-            >
-              Unlock Your Custom Plan
-            </Link>
+          <span className="relative inline-flex rounded-full">
+              <span className="dentnav-cta-primary__halo rounded-full" aria-hidden />
+              <Link
+                href="/questionnaire"
+                className="dentnav-cta-primary relative z-[1] inline-flex items-center justify-center rounded-full bg-[linear-gradient(99.11deg,#006591_0%,#0EA5E9_100%)] px-10 py-5 text-base font-bold leading-6 text-white transition-all duration-300 hover:-translate-y-1 hover:brightness-110 active:scale-[0.98]"
+              >
+                <span className="dentnav-cta-primary__shine" aria-hidden />
+                <span className="relative z-[1]">Unlock Your Custom Plan</span>
+              </Link>
+            </span>
             <a
               href="#expert"
               className="inline-flex items-center justify-center rounded-full border-2 border-[rgba(14,165,233,0.3)] bg-white px-10 py-5 text-base font-bold leading-6 text-dent-deep transition-all duration-300 hover:-translate-y-1 hover:bg-slate-50 hover:border-[rgba(14,165,233,0.5)] active:scale-[0.98]"

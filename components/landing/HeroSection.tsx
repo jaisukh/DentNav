@@ -62,38 +62,84 @@ const floatAccent = {
 
 type FloatAccent = keyof typeof floatAccent;
 
+const floatIconTint: Record<FloatAccent, string> = {
+  sky: "text-sky-600",
+  teal: "text-teal-600",
+  violet: "text-violet-600",
+  amber: "text-amber-600",
+  emerald: "text-emerald-600",
+};
+
 function HeroFloatCard({
+  icon,
   eyebrow,
   title,
   description,
   tags,
   align = "left",
+  iconAlign = "left",
   accent = "sky",
   className,
 }: {
+  icon: ReactNode;
   eyebrow: string;
   title: string;
   description?: string;
   tags?: string[];
   align?: "left" | "right" | "center";
+  /** Icon + tags row: visa card uses `right` so the icon sits on the right with tags to its left. */
+  iconAlign?: "left" | "right";
   accent?: FloatAccent;
   className?: string;
 }) {
   const a = floatAccent[accent];
   const alignCls =
     align === "right" ? "text-right" : align === "center" ? "text-center" : "";
-  const tagRowCls =
-    align === "right"
-      ? "mt-2 flex flex-wrap justify-end gap-1"
-      : align === "center"
-        ? "mt-2 flex flex-wrap justify-center gap-1"
-        : "mt-2 flex flex-wrap gap-1";
 
   const rowDir = align === "right" ? "flex-row-reverse" : "flex-row";
 
+  const iconEl = (
+    <span
+      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/95 shadow-sm ring-1 ring-slate-200/90 [&_svg]:h-5 [&_svg]:w-5 ${floatIconTint[accent]}`}
+      aria-hidden
+    >
+      {icon}
+    </span>
+  );
+
+  const tagEls =
+    tags && tags.length > 0
+      ? tags.map((t) => (
+          <span
+            key={t}
+            className={`rounded-full px-2 py-0.5 font-display text-[10px] font-semibold leading-[15px] ${a.tag}`}
+          >
+            {t}
+          </span>
+        ))
+      : null;
+
+  const iconTagsRow = (
+    <div
+      className={`mt-2.5 flex flex-row flex-wrap items-center gap-2 ${iconAlign === "right" ? "justify-end" : "justify-start"}`}
+    >
+      {iconAlign === "right" ? (
+        <>
+          {tagEls}
+          {iconEl}
+        </>
+      ) : (
+        <>
+          {iconEl}
+          {tagEls}
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div
-      className={`flex max-w-[min(280px,100%)] gap-3 rounded-2xl px-3 py-2.5 ${rowDir} ${a.shell} ${alignCls} ${className}`}
+      className={`flex max-w-[min(280px,100%)] gap-3 rounded-2xl px-4 py-4 ${rowDir} ${a.shell} ${alignCls} ${className}`}
     >
       <span
         className={`mt-0.5 w-1 shrink-0 self-stretch rounded-full ${a.bar}`}
@@ -105,20 +151,19 @@ function HeroFloatCard({
         </p>
         <p className="mt-0.5 font-display text-sm font-bold leading-snug text-dent-ink">{title}</p>
         {description ? (
-          <p className="mt-1 text-xs font-normal leading-relaxed text-[#475569]">{description}</p>
-        ) : null}
-        {tags && tags.length > 0 ? (
-          <div className={tagRowCls}>
-            {tags.map((t) => (
-              <span
-                key={t}
-                className={`rounded-full px-2 py-0.5 font-display text-[10px] font-semibold leading-[15px] ${a.tag}`}
-              >
-                {t}
-              </span>
-            ))}
+          <div className="mt-1 space-y-0">
+            {description
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((line, i) => (
+                <p key={i} className="text-xs font-normal leading-[17px] text-[#475569]">
+                  {line}
+                </p>
+              ))}
           </div>
         ) : null}
+        {iconTagsRow}
       </div>
     </div>
   );
@@ -210,13 +255,22 @@ export function HeroSection() {
 
             <div className="max-w-[530px] pt-8">
               <div className="flex flex-col gap-[11px] pt-4">
-                <Link
-                  href="/questionnaire"
-                  className="group relative isolate inline-flex w-full items-center justify-center gap-2 rounded-full bg-[linear-gradient(98.5deg,#006591_0%,#0EA5E9_100%)] px-8 py-5 text-lg font-bold leading-7 text-white shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_25px_30px_-5px_rgba(0,0,0,0.15),0_12px_15px_-6px_rgba(0,0,0,0.1)] active:scale-[0.98]"
-                >
-                  Start Your Journey Today
-                  <span className="transition-transform duration-300 group-hover:translate-x-1" aria-hidden>→</span>
-                </Link>
+              <span className="relative inline-flex w-full rounded-full">
+                  <span className="dentnav-cta-primary__halo rounded-full" aria-hidden />
+                  <Link
+                    href="/questionnaire"
+                    className="dentnav-cta-primary group relative z-[1] inline-flex w-full items-center justify-center gap-2 rounded-full bg-[linear-gradient(98.5deg,#006591_0%,#0EA5E9_100%)] px-8 py-5 text-lg font-bold leading-7 text-white transition-all duration-300 hover:-translate-y-1 hover:brightness-110 active:scale-[0.98]"
+                  >
+                    <span className="dentnav-cta-primary__shine" aria-hidden />
+                    <span className="relative z-[1]">Start Your Journey Today</span>
+                    <span
+                      className="relative z-[1] transition-transform duration-300 group-hover:translate-x-1"
+                      aria-hidden
+                    >
+                      →
+                    </span>
+                  </Link>
+                </span>
                 <p className="px-20 text-[13px] font-normal leading-5 text-[#94A3B8]">
                   Answer a quick questionnaire to know where you stand
                 </p>
@@ -250,43 +304,109 @@ export function HeroSection() {
           {/* 1 — top of the gap between left column and cube */}
           <HeroFloatCard
             accent="sky"
+            icon={
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M14 2v6h6M16 13H8M16 17H8M10 9H8"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            }
             eyebrow="Application cycle"
             title="CAAPID & programs"
-            description="Strong files, timelines, and school fit."
-            tags={["CAAPID", "Personal statement", "LORs"]}
-            className="absolute left-[48%] top-[8%] max-w-[min(224px,21vw)]"
+            description={
+              "Strong applications and school lists.\nTimelines that match your goals."
+            }
+            tags={["CAAPID", "SOPs", "LORs"]}
+            className="absolute left-[45%] top-[4%] max-w-[min(280px,25vw)]"
           />
 
           {/* 2 — top right; card centre ≈ cube's right edge */}
           <HeroFloatCard
             accent="teal"
             align="right"
+            iconAlign="right"
+            icon={
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.75" />
+                <path
+                  d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10M12 2a15.3 15.3 0 00-4 10 15.3 15.3 0 004 10"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                />
+              </svg>
+            }
             eyebrow="Visa & status"
             title="Immigration pathways"
-            description="Common dentist-relevant routes."
+            description={
+              "Common visa paths for dentists.\nPlan status before you move."
+            }
             tags={["EB1", "O1", "H1B", "F1", "J1"]}
-            className="absolute right-[3%] top-[2%] max-w-[min(224px,21vw)]"
+            className="absolute right-[2%] top-[0%] max-w-[min(280px,25vw)]"
           />
 
           {/* 3 — vertically centred in the column gap */}
           <HeroFloatCard
             accent="violet"
+            icon={
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M22 10v6M2 10l10-5 10 5-10 5z"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M6 12v5c3 3 9 3 12 0v-5"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            }
             eyebrow="Education tracks"
             title="Advanced Standing DDS"
-            description="GPR, AEGD, and bridge planning."
+            description={
+              "AS-DDS, GPR, and AEGD compared.\nPick what fits your timeline."
+            }
             tags={["AS-DDS", "GPR", "AEGD"]}
-            className="absolute left-[53%] top-[52%] max-w-[min(260px,21vw)] -translate-y-1/2"
+            className="absolute left-[51%] top-[52%] max-w-[min(310px,25vw)] -translate-y-1/2"
           />
 
           {/* 4 — below the cube */}
           <HeroFloatCard
             accent="amber"
             align="center"
+            icon={
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            }
             eyebrow="Exams & licensure"
-            title="INBDE → state license"
-            description="High-stakes tests and what comes next."
-            tags={["INBDE", "Bench tests", "State boards"]}
-            className="absolute bottom-[3%] left-[75%] max-w-[min(224px,21vw)] "
+            title="INBDE → State License"
+            description={
+              "INBDE through bench tests to licensure.\nEach step in order."
+            }
+            tags={["INBDE", "Bench tests", "State Boards"]}
+            className="absolute bottom-[1%] left-[72%] max-w-[min(330px,35vw)]"
           />
         </div>
       </div>
