@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { BrandLogo } from "@/components/landing/BrandLogo";
+import { NavBar } from "@/components/landing/NavBar";
 import { getQuestionnaire } from "@/lib/questionnaire-loader";
 import type { AnswerValue, Question } from "@/lib/questionnaire.types";
 import { QuestionnaireField } from "./QuestionnaireField";
@@ -42,37 +42,22 @@ export function QuestionnaireView() {
   };
 
   return (
-    <div className="relative isolate z-0 mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col items-start justify-between bg-[radial-gradient(129.64%_129.64%_at_-4116.67%_-4116.67%,rgba(125,211,252,0.15)_1.61%,rgba(125,211,252,0)_1.61%)] pb-px font-display">
-      <nav
-        className="fixed left-1/2 top-0 z-[100] flex w-full max-w-[1440px] -translate-x-1/2 flex-col items-start border-b border-slate-100 bg-white/95 backdrop-blur-[6px]"
-        aria-label="Questionnaire"
+    <div className="relative isolate flex min-h-dvh w-full flex-col bg-[radial-gradient(129.64%_129.64%_at_-4116.67%_-4116.67%,rgba(125,211,252,0.15)_1.61%,rgba(125,211,252,0)_1.61%)] pb-px font-display text-dent-ink">
+      <NavBar />
+      <div
+        className="sticky top-[68px] z-40 w-full border-b border-[#E2E8F0] bg-white/90 backdrop-blur-sm"
+        role="presentation"
+        aria-hidden
       >
-        <div className="flex h-[50px] w-full items-center justify-between px-7 py-2.5">
-          <BrandLogo compact className="min-w-0 shrink-0" textClassName="font-bold text-[#1B3A5C]" />
-          <div className="flex items-center gap-4">
-            <Link
-              href="/auth/login"
-              className="text-xs font-semibold leading-[18px] text-slate-500 transition-colors hover:text-slate-700"
-            >
-              Logout
-            </Link>
-            <Link
-              href="/"
-              className="flex cursor-pointer flex-col items-center justify-center rounded-full bg-sky-500 px-4 py-1.5 text-xs font-bold leading-[18px] text-white no-underline transition-opacity hover:opacity-90"
-            >
-              Home
-            </Link>
-          </div>
-        </div>
-        <div className="absolute bottom-0 left-0 h-0.5 w-full bg-slate-100">
+        <div className="h-1 w-full bg-slate-100">
           <div
             className="h-full bg-sky-500 transition-[width] duration-200 ease-out"
             style={{ width: `${progressPct}%` }}
           />
         </div>
-      </nav>
+      </div>
 
-      <main className="z-0 mt-[51px] flex w-full flex-none flex-col items-center self-stretch bg-slate-50 px-5 pb-12 pt-16">
+      <main className="z-0 flex w-full flex-1 flex-col items-center self-stretch bg-slate-50 px-5 pb-12 pt-10 sm:pt-14">
         <form
           className="isolate flex w-full max-w-3xl flex-col items-start gap-4 rounded-3xl border border-sky-500/10 bg-white/90 p-7 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)] backdrop-blur-sm"
           onSubmit={handleSubmit}

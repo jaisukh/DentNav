@@ -1,7 +1,7 @@
 import type { AnalysisResultPayload } from "@/lib/analysis.types";
+import { NavBar } from "@/components/landing/NavBar";
 import { AnalysisFooter } from "./AnalysisFooter";
 import { AnalysisResultsCard } from "./AnalysisResultsCard";
-import { AnalysisTopNav } from "./AnalysisTopNav";
 import { AnalysisTopStrip } from "./AnalysisTopStrip";
 import { BlurredRoadmapSection } from "./BlurredRoadmapSection";
 
@@ -11,8 +11,8 @@ type AnalysisViewProps = {
 
 export function AnalysisView({ data }: AnalysisViewProps) {
   return (
-    <div className="relative isolate flex min-h-dvh w-full flex-col bg-white font-display">
-      <AnalysisTopNav />
+    <div className="relative isolate flex min-h-dvh w-full flex-col bg-white font-display text-dent-ink">
+      <NavBar />
 
       <main className="relative flex w-full flex-1 flex-col items-stretch">
         {/* Overlap: strip sits under nav; card overlaps strip (Figma: card top ~206px from frame, strip starts ~96px) */}

@@ -325,10 +325,10 @@ export function HeroSection() {
             eyebrow="Application cycle"
             title="CAAPID & programs"
             description={
-              "Strong applications and school lists.\nTimelines that match your goals."
+              "Strong applications and school enrollments.\nTimelines that match your goals."
             }
             tags={["CAAPID", "SOPs", "LORs"]}
-            className="absolute left-[45%] top-[4%] max-w-[min(280px,25vw)]"
+            className="absolute left-[45%] top-[2%] max-w-[min(310px,30vw)]"
           />
 
           {/* 2 — top right; card centre ≈ cube's right edge */}
@@ -352,7 +352,7 @@ export function HeroSection() {
               "Common visa paths for dentists.\nPlan status before you move."
             }
             tags={["EB1", "O1", "H1B", "F1", "J1"]}
-            className="absolute right-[2%] top-[0%] max-w-[min(280px,25vw)]"
+            className="absolute right-[2%] top-[-2%] max-w-[min(280px,25vw)]"
           />
 
           {/* 3 — vertically centred in the column gap */}

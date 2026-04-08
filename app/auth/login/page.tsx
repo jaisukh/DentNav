@@ -1,4 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
+import iconMark from "@/app/icon.png";
 import { AuthPanel } from "@/components/auth/AuthPanel";
 import Particles from "@/components/auth/Particles";
 
@@ -40,7 +42,18 @@ export default function LoginPage() {
                 <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-between gap-4 p-6 lg:gap-5 lg:p-10">
                     {/* Header/Logo */}
                     <header className="shrink-0">
-                        <Link href="/" className="inline-block">
+                        <Link
+                            href="/"
+                            className="inline-flex items-center gap-2.5"
+                        >
+                            <Image
+                                src={iconMark}
+                                alt=""
+                                width={72}
+                                height={72}
+                                className="h-9 w-9 shrink-0 object-contain lg:h-10 lg:w-10"
+                                priority
+                            />
                             <span className="font-display text-2xl font-[800] leading-none tracking-[-1px] text-white lg:text-[26px]">
                                 DentNav
                             </span>
@@ -95,29 +108,64 @@ export default function LoginPage() {
                 </div>
             </section>
 
-            {/* Right Panel — 45% width on desktop */}
-            <section className="relative flex h-full min-h-0 flex-1 flex-col items-center justify-between overflow-hidden px-5 pb-4 pt-14 lg:px-8 lg:pb-5 lg:pt-10">
+            {/* Right Panel — Google sign-in card */}
+            <section className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-gradient-to-b from-[#EFF6FF] via-white to-[#F1F5F9]">
                 {/* Top Right Back Link */}
-                <Link href="/" className="absolute right-5 top-5 z-10 flex items-center gap-1.5 text-xs font-semibold text-[#0EA5E9] transition-colors hover:text-[#0284C7] lg:right-8 lg:top-6 lg:text-sm">
-                    <svg className="h-2 w-2 rotate-180" viewBox="0 0 12 12" fill="none">
+                <Link
+                    href="/"
+                    className="absolute right-5 top-5 z-10 flex items-center gap-1.5 text-xs font-semibold text-[#0EA5E9] transition-colors hover:text-[#0284C7] lg:right-8 lg:top-6 lg:text-sm"
+                >
+                    <svg className="h-2 w-2 rotate-180" viewBox="0 0 12 12" fill="none" aria-hidden>
                         <path d="M1 1L11 6L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     Back to home
                 </Link>
 
-                {/* Form Container */}
-                <div className="flex w-full max-w-[400px] min-h-0 flex-1 flex-col justify-center gap-5 py-2 lg:gap-6">
-                    <AuthPanel />
-                </div>
+                <div className="flex min-h-0 flex-1 flex-col justify-center px-5 pb-5 pt-16 sm:px-8 sm:pb-6 sm:pt-20 lg:px-12 lg:pb-8 lg:pt-12">
+                    <div className="mx-auto flex w-full max-w-[440px] flex-col items-center gap-2 sm:gap-2.5">
+                        <div className="w-full rounded-[28px] border border-[#E2E8F0] bg-white/95 p-7 shadow-[0_24px_64px_-28px_rgba(12,26,58,0.22)] ring-1 ring-black/[0.03] backdrop-blur-[2px] sm:p-9 lg:p-10">
+                            <div className="mb-7 flex justify-center lg:mb-8 lg:hidden">
+                                <Link href="/" className="inline-flex items-center gap-2.5">
+                                    <Image
+                                        src={iconMark}
+                                        alt=""
+                                        width={72}
+                                        height={72}
+                                        className="h-10 w-10 shrink-0 object-contain"
+                                        priority
+                                    />
+                                    <span className="font-display text-[22px] font-[800] leading-none tracking-[-0.5px] text-[#0C1A3A]">
+                                        DentNav
+                                    </span>
+                                </Link>
+                            </div>
 
-                {/* Security Footnote */}
-                <div className="flex w-full max-w-[400px] shrink-0 items-center justify-center gap-2 border-t border-[#E6EEFF] pt-3">
-                    <svg className="h-3.5 w-3.5 shrink-0 text-[#006E2F]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                        <path d="M12 2C9.243 2 7 4.243 7 7V10C5.897 10 5 10.897 5 12V20C5 21.103 5.897 22 7 22H17C18.103 22 19 21.103 19 20V12C19 10.897 18.103 10 17 10V7C17 4.243 14.757 2 12 2ZM9 7C9 5.346 10.346 4 12 4C13.654 4 15 5.346 15 7V10H9V7ZM12 18C10.897 18 10 17.103 10 16C10 14.897 10.897 14 12 14C13.103 14 14 14.897 14 16C14 17.103 13.103 18 12 18Z" />
-                    </svg>
-                    <span className="text-[10px] font-bold uppercase tracking-[0.8px] text-[#6E7881] lg:text-[11px]">
-                        PROTECTED BY GOOGLE OAUTH 2.0 AND JWT
-                    </span>
+                            <AuthPanel />
+
+                            <div className="mt-8 flex flex-col gap-3 border-t border-[#EEF2F7] pt-7 lg:mt-10 lg:gap-3.5 lg:pt-8">
+                                <p className="text-center text-[11px] font-semibold uppercase tracking-[0.85px] text-[#94A3B8]">
+                                    Why Google?
+                                </p>
+                                <ul className="space-y-2.5 text-[13px] font-medium leading-snug text-[#475569] lg:text-[14px]">
+                                    <li className="flex gap-2.5 rounded-xl bg-[#F8FAFC] px-3.5 py-3 lg:px-4 lg:py-3.5">
+                                        <span className="shrink-0 text-[#0EA5E9]" aria-hidden>
+                                            ✓
+                                        </span>
+                                        <span>No separate password — fewer credentials to manage</span>
+                                    </li>
+                                    <li className="flex gap-2.5 rounded-xl bg-[#F8FAFC] px-3.5 py-3 lg:px-4 lg:py-3.5">
+                                        <span className="shrink-0 text-[#0EA5E9]" aria-hidden>
+                                            ✓
+                                        </span>
+                                        <span>Industry-standard sign-in trusted worldwide</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <p className="text-center text-[10px] pt-4 font-bold uppercase tracking-[0.75px] text-[#64748B] lg:text-[11px]">
+                            Authentication powered by Google
+                        </p>
+                    </div>
                 </div>
             </section>
         </main>
