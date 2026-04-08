@@ -198,7 +198,7 @@ export function HeroSection() {
       {/* Figma: hero content left:48 right:770 → 622px text; illustration left:770 → 806px */}
       <div className="relative z-[2] page-shell">
         <div className="grid w-full items-start gap-12 lg:grid-cols-[minmax(0,622px)_minmax(0,1fr)] lg:items-stretch lg:gap-x-[100px]">
-          <div className="max-w-[622px] lg:pt-[67px]">
+          <div className="max-w-[622px] lg:pt-9">
             <p className="inline-flex items-center rounded-full border border-[rgba(14,165,233,0.2)] bg-dent-badge-bg px-4 py-1.5 text-xs font-bold uppercase leading-4 tracking-[0.3px] text-dent-deep">
               Navigate U.S. dentistry with confidence
             </p>
@@ -210,14 +210,38 @@ export function HeroSection() {
               </h1>
             </div>
 
-            <div className="max-w-[600px] pt-8">
-              <p className="text-xl font-normal leading-7 text-[#475569]">
-                DentNav helps foreign-trained dentists navigate the complex pathway to U.S. dental careers with clarity,strategy and confidence.
+            <div className="max-w-[600px] pt-6 sm:pt-8">
+              <p className="text-lg font-normal leading-7 text-[#475569] sm:text-xl">
+                DentNav helps foreign-trained dentists navigate the complex pathway to U.S. dental careers with clarity, strategy, and confidence.
               </p>
             </div>
 
+            <div className="max-w-[530px] pt-5 sm:pt-6">
+              <div className="flex flex-col gap-[11px]">
+                <span className="relative inline-flex w-full rounded-full">
+                  <span className="dentnav-cta-primary__halo rounded-full" aria-hidden />
+                  <Link
+                    href="/questionnaire"
+                    className="dentnav-cta-primary group relative z-[1] inline-flex w-full items-center justify-center gap-2 rounded-full bg-[linear-gradient(98.5deg,#006591_0%,#0EA5E9_100%)] px-8 py-5 text-lg font-bold leading-7 text-white transition-all duration-300 hover:-translate-y-1 hover:brightness-110 active:scale-[0.98]"
+                  >
+                    <span className="dentnav-cta-primary__shine" aria-hidden />
+                    <span className="relative z-[1]">Start Your Journey Today</span>
+                    <span
+                      className="relative z-[1] transition-transform duration-300 group-hover:translate-x-1"
+                      aria-hidden
+                    >
+                      →
+                    </span>
+                  </Link>
+                </span>
+                <p className="px-4 text-center text-[13px] font-normal leading-5 text-[#94A3B8] sm:px-12 md:px-20">
+                  Answer a quick questionnaire to know where you stand
+                </p>
+              </div>
+            </div>
+
             <div className="w-full max-w-[622px] pt-8">
-              <div className="flex flex-col gap-6 pt-4">
+              <div className="flex flex-col gap-6 pt-2 sm:pt-4">
                 <div className="flex flex-col gap-4 sm:flex-row">
                   <ProblemCard
                     label="CAAPID, PASS & other applications"
@@ -247,33 +271,14 @@ export function HeroSection() {
                   />
                 </div>
 
-                <p className="flex items-center gap-2 text-sm font-medium leading-5 text-dent-deep">
-                  You're not alone - and you don't have to figure it out by yourself.
-                </p>
-              </div>
-            </div>
-
-            <div className="max-w-[530px] pt-8">
-              <div className="flex flex-col gap-[11px] pt-4">
-              <span className="relative inline-flex w-full rounded-full">
-                  <span className="dentnav-cta-primary__halo rounded-full" aria-hidden />
-                  <Link
-                    href="/questionnaire"
-                    className="dentnav-cta-primary group relative z-[1] inline-flex w-full items-center justify-center gap-2 rounded-full bg-[linear-gradient(98.5deg,#006591_0%,#0EA5E9_100%)] px-8 py-5 text-lg font-bold leading-7 text-white transition-all duration-300 hover:-translate-y-1 hover:brightness-110 active:scale-[0.98]"
-                  >
-                    <span className="dentnav-cta-primary__shine" aria-hidden />
-                    <span className="relative z-[1]">Start Your Journey Today</span>
-                    <span
-                      className="relative z-[1] transition-transform duration-300 group-hover:translate-x-1"
-                      aria-hidden
-                    >
-                      →
-                    </span>
-                  </Link>
-                </span>
-                <p className="px-20 text-[13px] font-normal leading-5 text-[#94A3B8]">
-                  Answer a quick questionnaire to know where you stand
-                </p>
+                <div className="max-w-[570px] space-y-2">
+                  <p className="text-sm font-medium leading-6 text-dent-deep">
+                    You&apos;re not alone—and you don&apos;t have to decode the U.S. dental pathway by yourself.
+                  </p>
+                  <p className="text-sm font-medium leading-6 text-dent-deep">
+                    DentNav helps you focus on the next right step, not endless research rabbit holes.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -328,7 +333,7 @@ export function HeroSection() {
               "Strong applications and school enrollments.\nTimelines that match your goals."
             }
             tags={["CAAPID", "SOPs", "LORs"]}
-            className="absolute left-[45%] top-[2%] max-w-[min(310px,30vw)]"
+            className="absolute left-[45%] top-[0%] max-w-[min(310px,30vw)]"
           />
 
           {/* 2 — top right; card centre ≈ cube's right edge */}
@@ -352,7 +357,7 @@ export function HeroSection() {
               "Common visa paths for dentists.\nPlan status before you move."
             }
             tags={["EB1", "O1", "H1B", "F1", "J1"]}
-            className="absolute right-[2%] top-[-2%] max-w-[min(280px,25vw)]"
+            className="absolute right-[2%] top-[-3%] max-w-[min(280px,25vw)]"
           />
 
           {/* 3 — vertically centred in the column gap */}
@@ -406,7 +411,7 @@ export function HeroSection() {
               "INBDE through bench tests to licensure.\nEach step in order."
             }
             tags={["INBDE", "Bench tests", "State Boards"]}
-            className="absolute bottom-[1%] left-[72%] max-w-[min(330px,35vw)]"
+            className="absolute bottom-[-3%] left-[72%] max-w-[min(330px,35vw)]"
           />
         </div>
       </div>

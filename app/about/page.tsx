@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import LineWaves from "@/components/about/LineWaves";
 import { Footer } from "@/components/landing/Footer";
@@ -7,6 +8,8 @@ type Founder = {
   name: string;
   role: string;
   profile: string;
+  photoSrc: string;
+  photoAlt: string;
   intro: string;
   story: string[];
   obstacles?: string[];
@@ -20,6 +23,9 @@ const founders: Founder[] = [
     name: "Dr. Venkata Ratna Kumar Rudravaram",
     role: "Co-Founder, DentNav",
     profile: "Licensed Dentist (CA, VA, WA)",
+    photoSrc: "/images/founders/rudravaram.png",
+    photoAlt:
+      "Dr. Venkata Ratna Kumar Rudravaram, professional headshot in a navy suit and tie",
     intro:
       "Dr. Rudravaram's journey is a blueprint for possibility for foreign-trained dentists.",
     story: [
@@ -52,6 +58,9 @@ const founders: Founder[] = [
     role: "Co-Founder, DentNav",
     profile:
       "Pediatric Dentist | Resident, Loma Linda University School of Dentistry",
+    photoSrc: "/images/founders/singaraju.png",
+    photoAlt:
+      "Dr. Anuja Singaraju, professional headshot in a black blazer and white blouse",
     intro:
       "Dr. Anuja's journey reflects clarity, preparation, and focused execution.",
     story: [
@@ -121,10 +130,10 @@ export default function AboutPage() {
               <h1 className="font-display text-4xl font-extrabold leading-tight tracking-[-1px] text-[#0C1A3A] sm:text-5xl">
                 Because We Know the Struggle
               </h1>
-              <p className="mx-auto max-w-[860px] text-balance text-lg font-medium leading-8 text-[#334155]">
-                We have been in your shoes. We know the confusion, the fear, and
-                the misinformation. DentNav was built to answer one question with
-                clarity: yes, your U.S. dental dream is possible.
+              <p className="mx-auto max-w-[860px] text-balance text-lg font-medium italic leading-8 text-[#334155]">
+                &ldquo;We have been in your shoes. We know the confusion, the fear,
+                and the misinformation. DentNav was built to answer one question
+                with clarity: yes, your U.S. dental dream is possible.&rdquo;
               </p>
               <div className="mx-auto mt-2 max-w-[880px] rounded-3xl border border-[#DCEBFF] bg-white/85 px-6 py-6 shadow-[0_18px_40px_-26px_rgba(2,132,199,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_24px_56px_-26px_rgba(2,132,199,0.34)] sm:px-8 sm:py-7">
                 <p className="text-balance text-base font-medium leading-7 text-[#334155] sm:text-lg sm:leading-8">
@@ -211,15 +220,15 @@ export default function AboutPage() {
                 />
                 <div className="grid gap-7 lg:grid-cols-[320px_1fr] lg:gap-10">
                   <div className="space-y-4">
-                    <div className="group/photo aspect-[4/5] w-full rounded-2xl border-2 border-dashed border-[#BFDBFE] bg-[linear-gradient(135deg,#F0F9FF_0%,#E0F2FE_100%)] p-5 transition-all duration-300 hover:border-[#7DD3FC]">
-                      <div className="flex h-full items-center justify-center rounded-xl border border-[#BAE6FD] bg-white/60 text-center">
-                        <p className="max-w-[180px] text-sm font-semibold leading-6 text-[#0369A1] transition-all duration-300 group-hover/photo:scale-[1.03]">
-                          Founder Photo Placeholder
-                          <span className="mt-1 block text-xs font-medium text-[#0284C7]">
-                            Hover preview space
-                          </span>
-                        </p>
-                      </div>
+                    <div className="group/photo relative aspect-[4/5] w-full overflow-hidden rounded-2xl border-2 border-[#BFDBFE] bg-[#F0F9FF] shadow-[0_12px_32px_-20px_rgba(14,116,144,0.35)] transition-all duration-300 hover:border-[#7DD3FC] hover:shadow-[0_16px_40px_-18px_rgba(14,116,144,0.4)]">
+                      <Image
+                        src={founder.photoSrc}
+                        alt={founder.photoAlt}
+                        fill
+                        className="object-cover object-top transition-transform duration-300 group-hover/photo:scale-[1.02]"
+                        sizes="(max-width: 1024px) 100vw, 320px"
+                        priority={founder.name.includes("Rudravaram")}
+                      />
                     </div>
                     <div className="rounded-2xl border border-[#DBEAFE] bg-[#F8FBFF] p-4">
                       <h3 className="font-display text-xl font-bold tracking-[-0.4px] text-[#0C1A3A]">
@@ -345,12 +354,19 @@ export default function AboutPage() {
               </p>
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3 sm:mt-10">
-                <Link
-                  href="/questionnaire"
-                  className="inline-flex items-center justify-center rounded-full bg-[linear-gradient(99.11deg,#006591_0%,#0EA5E9_100%)] px-7 py-3 text-sm font-bold text-white shadow-[0_10px_24px_-14px_rgba(0,101,145,0.8)] transition-all hover:-translate-y-0.5 hover:brightness-110 active:scale-[0.98]"
-                >
-                  Start Your Guidance Plan
-                </Link>
+                <span className="relative inline-flex rounded-full">
+                  <span
+                    className="dentnav-cta-primary__halo rounded-full"
+                    aria-hidden
+                  />
+                  <Link
+                    href="/questionnaire"
+                    className="dentnav-cta-primary relative z-[1] inline-flex items-center justify-center rounded-full bg-[linear-gradient(99.11deg,#006591_0%,#0EA5E9_100%)] px-7 py-3 text-sm font-bold leading-5 text-white shadow-[0_10px_24px_-14px_rgba(0,101,145,0.8)] transition-all duration-300 hover:-translate-y-1 hover:brightness-110 active:scale-[0.98]"
+                  >
+                    <span className="dentnav-cta-primary__shine" aria-hidden />
+                    <span className="relative z-[1]">Start Your Guidance Plan</span>
+                  </Link>
+                </span>
                 <Link
                   href="/auth/login"
                   className="inline-flex items-center justify-center rounded-full border border-[#BAE6FD] bg-white px-7 py-3 text-sm font-bold text-[#0C4A6E] transition-all hover:border-[#7DD3FC] hover:bg-[#F0F9FF]"

@@ -29,7 +29,7 @@ export function NavBar() {
             href="/questionnaire"
             className="rounded-full bg-dent-sky px-5 py-2.5 text-sm font-medium leading-5 text-white shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-opacity hover:opacity-90"
           >
-            Get Started For Free
+            Get Started
           </Link>
         </nav>
       </div>

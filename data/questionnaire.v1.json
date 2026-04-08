@@ -115,7 +115,8 @@
       "placeholder": "Choose an option",
       "options": [
         "Pursue master's degree",
-        "Apply to dental schools from home country"
+        "Apply to dental schools from home country",
+        "Other"
       ]
     },
     {
