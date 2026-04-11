@@ -1,4 +1,4 @@
-export type QuestionType = "textarea" | "dropdown" | "radio" | "multiSelect";
+export type QuestionType = "textarea" | "dropdown" | "radio" | "multiSelect" | "searchableDropdown";
 
 export type QuestionBase = {
   id: string;
@@ -8,17 +8,30 @@ export type QuestionBase = {
   description?: string;
 };
 
+export type QuestionDependsOn = {
+  questionId: string;
+  /** Reserved for future S3-driven wiring; resolution uses `questionId` + degreesByCountry. */
+  optionsFrom: string;
+};
+
 export type TextareaQuestion = QuestionBase & {
   type: "textarea";
   placeholder?: string;
-  /** Visual height hint; defaults to 3 rows if omitted */
   rows?: number;
+};
+
+export type SearchableDropdownQuestion = QuestionBase & {
+  type: "searchableDropdown";
+  placeholder?: string;
+  optionsFrom: "keys:degreesByCountry" | string;
 };
 
 export type DropdownQuestion = QuestionBase & {
   type: "dropdown";
   placeholder?: string;
-  options: string[];
+  /** Static options when no dependency. */
+  options?: string[];
+  dependsOn?: QuestionDependsOn;
 };
 
 export type RadioQuestion = QuestionBase & {
@@ -38,12 +51,19 @@ export type Question =
   | TextareaQuestion
   | DropdownQuestion
   | RadioQuestion
-  | MultiSelectQuestion;
+  | MultiSelectQuestion
+  | SearchableDropdownQuestion;
+
+export type QuestionnaireMeta = {
+  title: string;
+  description: string;
+};
 
 export type QuestionnaireDocument = {
-  id: string;
-  title: string;
-  subtitle: string;
+  version: string;
+  lastUpdated: string;
+  meta: QuestionnaireMeta;
+  degreesByCountry: Record<string, string[]>;
   questions: Question[];
 };
 

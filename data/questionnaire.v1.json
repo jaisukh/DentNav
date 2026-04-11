@@ -1,20 +1,311 @@
 {
-  "id": "dentnav-assessment-v1",
-  "title": "Tell Us About Yourself",
-  "subtitle": "Get a Personalized Roadmap matching your Profile",
+  "version": "2.0",
+  "lastUpdated": "2026-04-11",
+  "meta": {
+    "title": "Dental Pathway Assessment",
+    "description": "Questionnaire to generate a personalized US dental career roadmap"
+  },
+  "degreesByCountry": {
+    "India": [
+      "BDS"
+    ],
+    "Pakistan": [
+      "BDS"
+    ],
+    "Bangladesh": [
+      "BDS"
+    ],
+    "Sri Lanka": [
+      "BDS"
+    ],
+    "Nepal": [
+      "BDS"
+    ],
+    "Philippines": [
+      "DMD"
+    ],
+    "Iran": [
+      "DDS"
+    ],
+    "Iraq": [
+      "BDS"
+    ],
+    "Egypt": [
+      "BDS",
+      "BChD"
+    ],
+    "Saudi Arabia": [
+      "BDS"
+    ],
+    "United Arab Emirates": [
+      "BDS"
+    ],
+    "Jordan": [
+      "BDS",
+      "DDS"
+    ],
+    "Syria": [
+      "DDS"
+    ],
+    "Lebanon": [
+      "DDS",
+      "BDS"
+    ],
+    "Kuwait": [
+      "BDS"
+    ],
+    "Qatar": [
+      "BDS"
+    ],
+    "Bahrain": [
+      "BDS"
+    ],
+    "Oman": [
+      "BDS"
+    ],
+    "Yemen": [
+      "BDS"
+    ],
+    "Libya": [
+      "BDS"
+    ],
+    "Tunisia": [
+      "Doctorat en Médecine Dentaire"
+    ],
+    "Algeria": [
+      "Doctorat en Médecine Dentaire"
+    ],
+    "Morocco": [
+      "Doctorat en Médecine Dentaire"
+    ],
+    "Sudan": [
+      "BDS"
+    ],
+    "Ethiopia": [
+      "DDS"
+    ],
+    "Kenya": [
+      "BDS"
+    ],
+    "Tanzania": [
+      "BDS"
+    ],
+    "Uganda": [
+      "BDS"
+    ],
+    "Nigeria": [
+      "BDS"
+    ],
+    "Ghana": [
+      "BDS"
+    ],
+    "South Africa": [
+      "BDS",
+      "BChD"
+    ],
+    "Zimbabwe": [
+      "BDS"
+    ],
+    "United Kingdom": [
+      "BDS",
+      "BChD",
+      "BDentSc"
+    ],
+    "Ireland": [
+      "BDS",
+      "BDentSc"
+    ],
+    "Australia": [
+      "BDSc",
+      "BDS",
+      "DDS",
+      "DMD"
+    ],
+    "New Zealand": [
+      "BDS"
+    ],
+    "Canada": [
+      "DDS",
+      "DMD"
+    ],
+    "United States": [
+      "DDS",
+      "DMD"
+    ],
+    "China": [
+      "BM (Stomatology)",
+      "DDS"
+    ],
+    "Taiwan": [
+      "DDS"
+    ],
+    "Japan": [
+      "DDS"
+    ],
+    "South Korea": [
+      "DDS"
+    ],
+    "Malaysia": [
+      "BDS"
+    ],
+    "Singapore": [
+      "BDS"
+    ],
+    "Thailand": [
+      "DDS"
+    ],
+    "Indonesia": [
+      "DRG (Dokter Gigi)"
+    ],
+    "Vietnam": [
+      "DDS"
+    ],
+    "Myanmar": [
+      "BDS"
+    ],
+    "Russia": [
+      "Stomatologist Diploma"
+    ],
+    "Ukraine": [
+      "Stomatologist Diploma"
+    ],
+    "Germany": [
+      "Staatsexamen Zahnmedizin"
+    ],
+    "France": [
+      "Diplôme d'État de Docteur en Chirurgie Dentaire"
+    ],
+    "Italy": [
+      "Laurea in Odontoiatria"
+    ],
+    "Spain": [
+      "Licenciado en Odontología",
+      "BScD"
+    ],
+    "Portugal": [
+      "Licenciatura em Medicina Dentária"
+    ],
+    "Netherlands": [
+      "Tandarts Diploma"
+    ],
+    "Belgium": [
+      "Licentiaat Tandheelkunde",
+      "DDS"
+    ],
+    "Sweden": [
+      "Tandläkarexamen"
+    ],
+    "Norway": [
+      "Cand.odont."
+    ],
+    "Denmark": [
+      "Cand.odont."
+    ],
+    "Finland": [
+      "Licentiate of Dental Medicine"
+    ],
+    "Poland": [
+      "Lekarz Dentysta Diploma"
+    ],
+    "Czech Republic": [
+      "MDDr."
+    ],
+    "Hungary": [
+      "DMD"
+    ],
+    "Romania": [
+      "DMD"
+    ],
+    "Greece": [
+      "DDS"
+    ],
+    "Turkey": [
+      "DDS"
+    ],
+    "Israel": [
+      "DMD"
+    ],
+    "Brazil": [
+      "BDS",
+      "CD (Cirurgião Dentista)"
+    ],
+    "Mexico": [
+      "Cirujano Dentista"
+    ],
+    "Argentina": [
+      "Odontólogo"
+    ],
+    "Colombia": [
+      "Odontólogo"
+    ],
+    "Chile": [
+      "Cirujano Dentista"
+    ],
+    "Peru": [
+      "CD (Cirujano Dentista)"
+    ],
+    "Venezuela": [
+      "Odontólogo"
+    ],
+    "Costa Rica": [
+      "DDS"
+    ],
+    "Cuba": [
+      "Estomatólogo"
+    ],
+    "Dominican Republic": [
+      "DDS"
+    ],
+    "Jamaica": [
+      "DDS"
+    ],
+    "Trinidad and Tobago": [
+      "DDS"
+    ],
+    "Afghanistan": [
+      "BDS"
+    ],
+    "Cambodia": [
+      "DDS"
+    ],
+    "Fiji": [
+      "BDS"
+    ],
+    "Palestine": [
+      "BDS"
+    ],
+    "Mauritius": [
+      "BDS"
+    ],
+    "Somalia": [
+      "BDS"
+    ]
+  },
   "questions": [
     {
-      "id": "q1-degree-background",
+      "id": "q1-degree-country",
       "order": 1,
-      "type": "textarea",
-      "rows": 2,
-      "label": "Are you a foreign / Indian-trained dentist with a dental degree?",
-      "description": "BDS / DDS / Other (please specify degree & country where you pursued education). Examples: BChD / UK; BDS / India; BScD / Spain.",
-      "placeholder": "e.g. BDS / India; DDS / Philippines"
+      "type": "searchableDropdown",
+      "label": "Which country did you complete your dental degree in?",
+      "description": "Select the country where you pursued your dental education.",
+      "placeholder": "Search or select a country",
+      "optionsFrom": "keys:degreesByCountry"
+    },
+    {
+      "id": "q1b-degree-type",
+      "order": 2,
+      "type": "dropdown",
+      "label": "What dental degree do you hold?",
+      "description": "Select the degree you were awarded.",
+      "placeholder": "Select your degree",
+      "dependsOn": {
+        "questionId": "q1-degree-country",
+        "optionsFrom": "degreesByCountry[q1-degree-country]"
+      }
     },
     {
       "id": "q2-target-program",
-      "order": 2,
+      "order": 3,
       "type": "dropdown",
       "label": "Which dental program do you want to pursue in the USA?",
       "placeholder": "Select a program",
@@ -28,7 +319,7 @@
     },
     {
       "id": "q3-practice-states",
-      "order": 3,
+      "order": 4,
       "type": "multiSelect",
       "label": "Do you have any US state preferences where you want to practice dentistry?",
       "description": "Select up to 3 states.",
@@ -89,7 +380,7 @@
     },
     {
       "id": "q4-visa",
-      "order": 4,
+      "order": 5,
       "type": "dropdown",
       "label": "Do you hold any sort of visa?",
       "placeholder": "Select visa status",
@@ -109,7 +400,7 @@
     },
     {
       "id": "q5-masters-vs-home",
-      "order": 5,
+      "order": 6,
       "type": "dropdown",
       "label": "Are you willing to pursue a master's in the USA (such as MPH, MBA, etc.) or apply to US dental schools from your home country?",
       "placeholder": "Choose an option",
@@ -121,14 +412,17 @@
     },
     {
       "id": "q6-loan-cosigner",
-      "order": 6,
+      "order": 7,
       "type": "radio",
       "label": "Do you know any friends or family who has a Green Card or is a Citizen who can cosign your education loan?",
-      "options": ["Yes", "No"]
+      "options": [
+        "Yes",
+        "No"
+      ]
     },
     {
       "id": "q7-clinical-years",
-      "order": 7,
+      "order": 8,
       "type": "dropdown",
       "label": "How many years of clinical experience do you have in your home country?",
       "placeholder": "Select range",
@@ -152,22 +446,35 @@
     },
     {
       "id": "q8-inbde",
-      "order": 8,
+      "order": 9,
       "type": "radio",
       "label": "Have you passed the INBDE?",
-      "options": ["Yes", "No"]
+      "options": [
+        "Yes",
+        "No"
+      ]
     },
     {
       "id": "q9-toefl",
-      "order": 9,
+      "order": 10,
       "type": "dropdown",
       "label": "English proficiency — TOEFL (total score band)",
       "placeholder": "Select score",
-      "options": ["2", "2.5", "3", "3.5", "4", "4.5", "5"]
+      "options": [
+        "2",
+        "2.5",
+        "3",
+        "3.5",
+        "4",
+        "4.5",
+        "5",
+        "5.5",
+        "6"
+      ]
     },
     {
       "id": "q10-start-cycle",
-      "order": 10,
+      "order": 11,
       "type": "dropdown",
       "label": "Target start cycle",
       "placeholder": "Select cycle",

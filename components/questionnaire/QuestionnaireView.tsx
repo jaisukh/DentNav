@@ -2,13 +2,25 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavBar } from "@/components/landing/NavBar";
 import { getQuestionnaire } from "@/lib/questionnaire-loader";
 import type { AnswerValue, Question } from "@/lib/questionnaire.types";
 import { QuestionnaireField } from "./QuestionnaireField";
 
-function isAnswerComplete(q: Question, val: AnswerValue | undefined): boolean {
+/** Shown above the form; not part of S3 payload. */
+const QUESTIONNAIRE_HEADING_TITLE = "Tell Us About Yourself";
+const QUESTIONNAIRE_HEADING_SUBTITLE = "Get a Personalized Roadmap matching your Profile";
+
+function isAnswerComplete(
+  q: Question,
+  val: AnswerValue | undefined,
+  allAnswers: Record<string, AnswerValue>,
+): boolean {
+  if (q.type === "dropdown" && q.dependsOn) {
+    const parent = allAnswers[q.dependsOn.questionId];
+    if (typeof parent !== "string" || !parent.trim()) return false;
+  }
   if (val === undefined) return false;
   if (q.type === "multiSelect") {
     if (!Array.isArray(val)) return false;
@@ -29,9 +41,29 @@ export function QuestionnaireView() {
     setAnswers((prev) => ({ ...prev, [id]: v }));
   }, []);
 
+  useEffect(() => {
+    const countryRaw = answers["q1-degree-country"];
+    const country = typeof countryRaw === "string" ? countryRaw.trim() : "";
+    if (!country) {
+      setAnswers((prev) => {
+        if (prev["q1b-degree-type"] === undefined) return prev;
+        const next = { ...prev };
+        delete next["q1b-degree-type"];
+        return next;
+      });
+      return;
+    }
+    const allowed = doc.degreesByCountry[country];
+    if (!allowed?.length) return;
+    const deg = answers["q1b-degree-type"];
+    if (typeof deg === "string" && deg && !allowed.includes(deg)) {
+      setAnswers((prev) => ({ ...prev, "q1b-degree-type": "" }));
+    }
+  }, [answers, doc]);
+
   const total = doc.questions.length;
   const filled = useMemo(
-    () => doc.questions.filter((q) => isAnswerComplete(q, answers[q.id])).length,
+    () => doc.questions.filter((q) => isAnswerComplete(q, answers[q.id], answers)).length,
     [doc.questions, answers],
   );
   const progressPct = total > 0 ? Math.round((filled / total) * 100) : 0;
@@ -64,15 +96,22 @@ export function QuestionnaireView() {
         >
           <div className="flex w-full max-w-full flex-col items-center pb-2">
             <h1 className="font-display mb-0.5 text-center text-[30px] font-extrabold leading-9 tracking-[-0.75px] text-[#0C1A3A]">
-              {doc.title}
+              {QUESTIONNAIRE_HEADING_TITLE}
             </h1>
             <p className="font-display mt-1 text-center text-[11px] font-medium leading-4 text-slate-500/80">
-              {doc.subtitle}
+              {QUESTIONNAIRE_HEADING_SUBTITLE}
             </p>
           </div>
 
           {doc.questions.map((q) => (
-            <QuestionnaireField key={q.id} question={q} value={answers[q.id]} onChange={setAnswer} />
+            <QuestionnaireField
+              key={q.id}
+              doc={doc}
+              question={q}
+              value={answers[q.id]}
+              answers={answers}
+              onChange={setAnswer}
+            />
           ))}
 
           <div className="flex w-full flex-col items-center gap-4 border-t border-slate-50 pt-4">
