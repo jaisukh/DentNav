@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavBar } from "@/components/landing/NavBar";
-import { getQuestionnaire } from "@/lib/questionnaire-loader";
-import type { AnswerValue, Question } from "@/lib/questionnaire.types";
+import { storeAnalysisResult } from "@/lib/analysis-session";
+import { fetchQuestionnaire } from "@/lib/api/questionnaire";
+import { submitAnalysis } from "@/lib/api/analysis";
+import type { AnswerValue, Question, QuestionnaireDocument } from "@/lib/questionnaire.types";
 import { QuestionnaireField } from "./QuestionnaireField";
 
 /** Shown above the form; not part of S3 payload. */
@@ -34,7 +36,8 @@ function isAnswerComplete(
 
 export function QuestionnaireView() {
   const router = useRouter();
-  const doc = useMemo(() => getQuestionnaire(), []);
+  const [doc, setDoc] = useState<QuestionnaireDocument | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
 
   const setAnswer = useCallback((id: string, v: AnswerValue) => {
@@ -42,6 +45,21 @@ export function QuestionnaireView() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    fetchQuestionnaire()
+      .then((d) => {
+        if (!cancelled) setDoc(d);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError("Could not load questionnaire.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!doc) return;
     const countryRaw = answers["q1-degree-country"];
     const country = typeof countryRaw === "string" ? countryRaw.trim() : "";
     if (!country) {
@@ -61,17 +79,39 @@ export function QuestionnaireView() {
     }
   }, [answers, doc]);
 
-  const total = doc.questions.length;
-  const filled = useMemo(
-    () => doc.questions.filter((q) => isAnswerComplete(q, answers[q.id], answers)).length,
-    [doc.questions, answers],
-  );
+  const total = doc?.questions.length ?? 0;
+  const filled = useMemo(() => {
+    if (!doc) return 0;
+    return doc.questions.filter((q) => isAnswerComplete(q, answers[q.id], answers)).length;
+  }, [doc, answers]);
   const progressPct = total > 0 ? Math.round((filled / total) * 100) : 0;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    try {
+      const payload = await submitAnalysis({ answers });
+      storeAnalysisResult(payload);
+    } catch {
+      /* navigate without session handoff; analysis page will GET */
+    }
     router.push("/analysis");
   };
+
+  if (loadError) {
+    return (
+      <div className="relative isolate flex min-h-dvh w-full flex-col items-center justify-center bg-slate-50 font-display text-slate-600">
+        {loadError}
+      </div>
+    );
+  }
+
+  if (!doc) {
+    return (
+      <div className="relative isolate flex min-h-dvh w-full flex-col items-center justify-center bg-slate-50 font-display text-slate-500">
+        Loading questionnaire…
+      </div>
+    );
+  }
 
   return (
     <div className="relative isolate flex min-h-dvh w-full flex-col bg-[radial-gradient(129.64%_129.64%_at_-4116.67%_-4116.67%,rgba(125,211,252,0.15)_1.61%,rgba(125,211,252,0)_1.61%)] pb-px font-display text-dent-ink">

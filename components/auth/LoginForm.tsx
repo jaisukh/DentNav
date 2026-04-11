@@ -1,11 +1,31 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { signInWithGoogle } from "@/lib/api/auth";
+
 export function LoginForm() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function handleGoogleSignIn() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await signInWithGoogle();
+      router.push("/home");
+    } catch {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <button
         type="button"
-        className="flex w-full items-center justify-center gap-3 rounded-full border border-[#BEC8D2] bg-white py-3.5 text-[15px] shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all hover:border-[#94A3B8] hover:bg-slate-50 hover:shadow-[0_4px_14px_rgba(15,23,42,0.08)] active:scale-[0.99] lg:py-4 lg:text-base"
+        disabled={busy}
+        onClick={handleGoogleSignIn}
+        className="flex w-full items-center justify-center gap-3 rounded-full border border-[#BEC8D2] bg-white py-3.5 text-[15px] shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all hover:border-[#94A3B8] hover:bg-slate-50 hover:shadow-[0_4px_14px_rgba(15,23,42,0.08)] active:scale-[0.99] disabled:opacity-60 lg:py-4 lg:text-base"
       >
         <svg className="h-5 w-5 shrink-0 lg:h-6 lg:w-6" viewBox="0 0 24 24" aria-hidden>
           <path
@@ -25,7 +45,7 @@ export function LoginForm() {
             fill="#EA4335"
           />
         </svg>
-        <span className="font-bold text-[#0C1A3A]">Continue with Google</span>
+        <span className="font-bold text-[#0C1A3A]">{busy ? "Signing in…" : "Continue with Google"}</span>
       </button>
       <p className="text-center text-[13px] font-medium leading-relaxed text-[#64748B] lg:text-[14px]">
         New here? We&apos;ll set up your DentNav profile the first time you sign in with Google.
