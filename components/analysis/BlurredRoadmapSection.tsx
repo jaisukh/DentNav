@@ -49,7 +49,7 @@ function RoadmapSkeleton() {
 
 export function BlurredRoadmapSection() {
   return (
-    <section className="relative isolate w-full overflow-hidden bg-white px-6 pb-24 pt-20 lg:px-[95px]">
+    <section className="relative isolate w-full overflow-hidden bg-white px-6 pb-10 pt-20 lg:px-[95px]">
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(70.71%_70.71%_at_50%_50%,#0EA5E9_2.95%,rgba(14,165,233,0)_2.95%),#FFFFFF] opacity-[0.05]"
         aria-hidden

@@ -1,5 +1,6 @@
 import { readinessLabel } from "@/lib/analysis-readiness";
 import type { AnalysisResultPayload } from "@/lib/analysis.types";
+import { AnalysisInsightStrip } from "./AnalysisInsightStrip";
 import { ScoreGauge } from "./ScoreGauge";
 
 type AnalysisResultsCardProps = {
@@ -24,18 +25,7 @@ export function AnalysisResultsCard({ data }: AnalysisResultsCardProps) {
 
         {/* Analysis Summary — Figma: right column ~65% (677.33 / 1040) */}
         <div className="flex min-w-0 flex-1 flex-col gap-6 lg:pl-8">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-display inline-flex items-center gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-bold text-sky-600">
-              <span className="inline-block h-3 w-3 rounded-sm bg-sky-500/80" aria-hidden />
-              {data.ClearTag}
-            </span>
-            <span className="font-display inline-flex rounded-2xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-300 blur-[1px]">
-              {data.Blurtag1}
-            </span>
-            <span className="font-display inline-flex rounded-2xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-300 blur-[2px]">
-              {data.Blurtag2}
-            </span>
-          </div>
+          <AnalysisInsightStrip />
 
           <div className="relative isolate">
             <div className="flex flex-col gap-4">
