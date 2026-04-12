@@ -1,6 +1,7 @@
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,9 +15,9 @@ class Settings(BaseSettings):
     backend_cors_origins: str = (
         "http://localhost:3000,https://dentnav.vercel.app"
     )
-    # Matches https://*.vercel.app when BACKEND_CORS_ORIGINS is too narrow on Railway.
-    # Env CORS_ORIGIN_REGEX; set empty to disable.
-    cors_origin_regex: Optional[str] = r"^https://[\w.-]+\.vercel\.app$"
+    # Matches production + preview deploys (https://<anything>.vercel.app).
+    # Env CORS_ORIGIN_REGEX. Empty string on Railway would otherwise disable regex — see validator.
+    cors_origin_regex: Optional[str] = r"^https://[^/]+\.vercel\.app$"
     # OAuth redirects; override FRONTEND_BASE_URL on Railway (e.g. https://dentnav.vercel.app).
     frontend_base_url: str = "http://localhost:3000"
     database_url: str = "postgresql://postgres:postgres@localhost:5432/dentnav?schema=public"
@@ -34,6 +35,14 @@ class Settings(BaseSettings):
     # Groq LLM settings for pathway analysis
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
+
+    @field_validator("cors_origin_regex", mode="before")
+    @classmethod
+    def _cors_regex_empty_means_default(cls, v: Any) -> Any:
+        # Railway UI sometimes sets CORS_ORIGIN_REGEX to blank, which would drop Vercel previews.
+        if v == "":
+            return r"^https://[^/]+\.vercel\.app$"
+        return v
 
     @property
     def cors_origins(self) -> List[str]:
