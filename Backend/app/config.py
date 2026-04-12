@@ -10,10 +10,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    backend_cors_origins: str = "http://localhost:3000",
-    "dentnav-git-back-exp-jais-projects-a5e7f082.vercel.app"
-    frontend_base_url: str = "http://localhost:3000","dentnav-git-back-exp-jais-projects-a5e7f082.vercel.app"
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/dentnav?schema=public","postgresql://postgres:dbrOAuraOKovEsVPwYosdCqklQOSkcjS@postgres.railway.internal:5432/railway"
+    # Comma-separated origins; override with BACKEND_CORS_ORIGINS in production.
+    backend_cors_origins: str = (
+        "http://localhost:3000,https://dentnav.vercel.app"
+    )
+    frontend_base_url: str = "http://localhost:3000"
+    database_url: str = "postgresql://postgres:postgres@localhost:5432/dentnav?schema=public"
 
     # Questionnaire source from S3.
     aws_region: str = "us-east-1"
