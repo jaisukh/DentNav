@@ -16,9 +16,11 @@ This service replaces the temporary Next.js route handlers and provides the API 
 
 - `GET /api/v1/analysis`
   - Returns analysis payload shape expected by `AnalysisView`.
+  - Uses Groq when configured; falls back to mock if unavailable.
 
 - `POST /api/v1/analysis`
-  - Placeholder for future LLM call; currently returns the same mock payload.
+  - Uses Groq to generate a personalized pathway from questionnaire answers.
+  - Returns `Body` as array of paragraph strings.
 
 - `GET /api/v1/auth/google/login`
   - OAuth entrypoint.
@@ -46,6 +48,9 @@ This service replaces the temporary Next.js route handlers and provides the API 
   - `GOOGLE_CLIENT_ID`
   - `GOOGLE_CLIENT_SECRET`
   - `GOOGLE_REDIRECT_URI` (must match Google console redirect URI)
+- Groq:
+  - `GROQ_API_KEY`
+  - `GROQ_MODEL` (optional, default: `llama-3.3-70b-versatile`)
 
 ## How to obtain the keys
 

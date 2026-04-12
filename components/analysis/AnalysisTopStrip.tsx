@@ -33,9 +33,9 @@ export function AnalysisTopStrip({ data }: AnalysisTopStripProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {pills.map((label) => (
+          {pills.map((label, index) => (
             <span
-              key={label}
+              key={`${label}-${index}`}
               className="font-display rounded-full border border-sky-500/20 bg-white px-4 py-1.5 text-xs font-bold uppercase tracking-[0.3px] text-sky-500"
             >
               {label}

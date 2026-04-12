@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = ""
+    # Groq LLM settings for pathway analysis
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
 
     @property
     def cors_origins(self) -> List[str]:
@@ -30,11 +33,25 @@ class Settings(BaseSettings):
 
     @property
     def analysis_mock_path(self) -> Path:
-        return REPO_ROOT / "data" / "analysis-mock.json"
+        # Works both locally (`.../Fig/data`) and in Docker (`/app/data`).
+        candidates = [
+            REPO_ROOT / "data" / "analysis-mock.json",
+            Path("/app/data/analysis-mock.json"),
+            Path("/data/analysis-mock.json"),
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        # Return default candidate for error messages/callers.
+        return candidates[0]
 
     @property
     def has_google_oauth_config(self) -> bool:
         return bool(self.google_client_id and self.google_client_secret and self.google_redirect_uri)
+
+    @property
+    def has_groq_config(self) -> bool:
+        return bool(self.groq_api_key)
 
 
 settings = Settings()

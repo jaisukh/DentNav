@@ -22,10 +22,12 @@
 - **Request body:** `{ answers?: Record<string, unknown> }`
 - **Response shape:** `AnalysisResultPayload`
   - `Country`, `degree`, `yearsOfExp`, `Performance`, `Body`
+  - `Body` is an array of paragraph strings from Groq output.
 
 ### `GET /api/v1/analysis`
 - **Expected by:** analysis page fallback load
 - **Response shape:** same `AnalysisResultPayload`
+- **Behavior:** tries Groq with empty/default profile; falls back to `data/analysis-mock.json` if Groq is unavailable.
 
 ### `GET /api/v1/auth/google/login`
 - **Expected by:** login button redirect

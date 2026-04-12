@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { AnalysisView } from "@/components/analysis/AnalysisView";
-import { takeAnalysisResultFromSession } from "@/lib/analysis-session";
+import {
+  analysisHandoffStorageKey,
+  clearAnalysisResultFromSession,
+  peekAnalysisResultFromSession,
+} from "@/lib/analysis-session";
 import { fetchAnalysis } from "@/lib/api/analysis";
 import type { AnalysisResultPayload } from "@/lib/analysis.types";
 
@@ -12,11 +16,48 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const fromQuestionnaire = takeAnalysisResultFromSession();
+
+    const params = new URLSearchParams(window.location.search);
+    const handoffId = params.get("h");
+    if (handoffId) {
+      const raw = sessionStorage.getItem(analysisHandoffStorageKey(handoffId));
+      if (raw) {
+        try {
+          const payload = JSON.parse(raw) as AnalysisResultPayload;
+          setData(payload);
+          queueMicrotask(() => {
+            if (cancelled) return;
+            sessionStorage.removeItem(analysisHandoffStorageKey(handoffId));
+            clearAnalysisResultFromSession();
+            if (window.location.pathname === "/analysis" && window.location.search.includes("h=")) {
+              window.history.replaceState(null, "", "/analysis");
+            }
+          });
+          return () => {
+            cancelled = true;
+          };
+        } catch {
+          /* fall through to legacy / GET */
+        }
+      }
+    }
+
+    const fromQuestionnaire = peekAnalysisResultFromSession();
     if (fromQuestionnaire) {
       setData(fromQuestionnaire);
-      return;
+      queueMicrotask(() => {
+        if (!cancelled) {
+          clearAnalysisResultFromSession();
+          if (window.location.pathname === "/analysis" && window.location.search.includes("h=")) {
+            window.history.replaceState(null, "", "/analysis");
+          }
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
     }
+
     fetchAnalysis()
       .then((payload) => {
         if (!cancelled) setData(payload);
