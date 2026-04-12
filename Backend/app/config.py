@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -10,10 +10,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Comma-separated origins; override with BACKEND_CORS_ORIGINS in production.
+    # Comma-separated origins; env BACKEND_CORS_ORIGINS overrides in production.
     backend_cors_origins: str = (
         "http://localhost:3000,https://dentnav.vercel.app"
     )
+    # Matches https://*.vercel.app when BACKEND_CORS_ORIGINS is too narrow on Railway.
+    # Env CORS_ORIGIN_REGEX; set empty to disable.
+    cors_origin_regex: Optional[str] = r"^https://[\w.-]+\.vercel\.app$"
+    # OAuth redirects; override FRONTEND_BASE_URL on Railway (e.g. https://dentnav.vercel.app).
     frontend_base_url: str = "http://localhost:3000"
     database_url: str = "postgresql://postgres:postgres@localhost:5432/dentnav?schema=public"
 
@@ -26,6 +30,7 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = ""
+
     # Groq LLM settings for pathway analysis
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
@@ -35,8 +40,14 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.backend_cors_origins.split(",") if origin.strip()]
 
     @property
+    def cors_origin_regex_effective(self) -> Optional[str]:
+        if self.cors_origin_regex is None:
+            return None
+        s = self.cors_origin_regex.strip()
+        return s or None
+
+    @property
     def analysis_mock_path(self) -> Path:
-        # Works both locally (`.../Fig/data`) and in Docker (`/app/data`).
         candidates = [
             REPO_ROOT / "data" / "analysis-mock.json",
             Path("/app/data/analysis-mock.json"),
@@ -45,7 +56,6 @@ class Settings(BaseSettings):
         for candidate in candidates:
             if candidate.exists():
                 return candidate
-        # Return default candidate for error messages/callers.
         return candidates[0]
 
     @property
