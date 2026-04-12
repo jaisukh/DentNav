@@ -1,22 +1,15 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { signInWithGoogle } from "@/lib/api/auth";
+import { getGoogleSignInUrl } from "@/lib/api/auth";
 
 export function LoginForm() {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
-  async function handleGoogleSignIn() {
+  function handleGoogleSignIn() {
     if (busy) return;
     setBusy(true);
-    try {
-      await signInWithGoogle();
-      router.push("/home");
-    } catch {
-      setBusy(false);
-    }
+    window.location.href = getGoogleSignInUrl();
   }
 
   return (

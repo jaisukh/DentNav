@@ -1,0 +1,10 @@
+node_modules
+.next
+coverage
+.git
+.gitignore
+*.log
+tsconfig.tsbuildinfo
+Backend/.venv
+Backend/__pycache__
+Backend/**/*.pyc

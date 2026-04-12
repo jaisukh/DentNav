@@ -6,9 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "dev:stack": "docker compose up --build",
+    "dev:stack:down": "docker compose down -v"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.13.5",
     "gsap": "^3.14.2",
     "next": "16.2.1",
     "ogl": "^1.0.11",

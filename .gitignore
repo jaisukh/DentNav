@@ -1,5 +1,11 @@
 # Dependencies
 node_modules/
+Backend/.venv/
+Backend/__pycache__/
+Backend/**/*.pyc
+Backend/.pytest_cache/
+Backend/.mypy_cache/
+Backend/.ruff_cache/
 
 # Next.js
 .next/
