@@ -6,8 +6,10 @@ services:
       POSTGRES_DB: dentnav
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    # Host 15432 avoids clashing with local Postgres / Docker on 5432, which can
+    # leave this container running without a published port or bridge endpoint.
     ports:
-      - "5432:5432"
+      - "15432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
