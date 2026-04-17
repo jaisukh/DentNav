@@ -6,8 +6,6 @@ services:
       POSTGRES_DB: dentnav
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-    # Host 15432 avoids clashing with local Postgres / Docker on 5432, which can
-    # leave this container running without a published port or bridge endpoint.
     ports:
       - "15432:5432"
     volumes:
@@ -20,24 +18,25 @@ services:
 
   backend:
     build:
-      context: .
-      dockerfile: Backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: dentnav-backend
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/dentnav?schema=public
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/dentnav
+      PYTHONPATH: /app
       BACKEND_CORS_ORIGINS: http://localhost:3000
       FRONTEND_BASE_URL: http://localhost:3000
-      AWS_REGION: ${AWS_REGION}
-      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
-      AWS_S3_QUESTIONNAIRE_KEY: ${AWS_S3_QUESTIONNAIRE_KEY}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_S3_QUESTIONNAIRE_KEY: ${AWS_S3_QUESTIONNAIRE_KEY:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
-      GROQ_API_KEY: ${GROQ_API_KEY}
-      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,8 +45,8 @@ services:
 
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: dentnav-frontend
     environment:
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
