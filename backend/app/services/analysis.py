@@ -603,7 +603,6 @@ def _fallback_ranked_pathways(
 ) -> list[dict[str, Any]]:
     visa = str(profile_snapshot.get("visaStatus", "")).strip() or "Not specified"
     cosigner = str(profile_snapshot.get("loanCosigner", "")).strip() or "Not specified"
-    toefl = str(profile_snapshot.get("toeflScore", "")).strip() or "Not specified"
     primary = pathway.get("primaryPathway") or "DDS/DMD (International Dentist Program)"
     secondary = pathway.get("secondaryStrategy") or "Master's -> DDS bridge strategy"
 
@@ -667,7 +666,6 @@ def _fallback_ranked_pathways(
 
 def _fallback_dentnav_services(profile_snapshot: dict[str, Any]) -> dict[str, list[dict[str, str]]]:
     visa = str(profile_snapshot.get("visaStatus", "")).strip().lower()
-    target_program = str(profile_snapshot.get("targetProgram", "")).strip() or "Target program"
     preferred_states = _list_of_strings(profile_snapshot.get("preferredStates"))
     states_text = ", ".join(preferred_states) if preferred_states else "preferred states"
 
@@ -710,7 +708,7 @@ def _fallback_dentnav_services(profile_snapshot: dict[str, Any]) -> dict[str, li
             "timing": "Mid 2027",
         },
         {
-            "service": f"State licensure guidance",
+            "service": "State licensure guidance",
             "reason": f"Verify {states_text} boards",
             "timing": "Ongoing",
         },
