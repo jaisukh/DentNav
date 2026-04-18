@@ -1,156 +1,182 @@
 {
+  "responseSchemaVersion": "v2-premium",
+  "Country": "India",
+  "degree": "BDS",
+  "yearsOfExp": "3-4 years",
+  "Performance": 55,
   "profileSnapshot": {
     "country": "India",
     "degree": "BDS",
     "clinicalExperience": "3-4 years",
-    "targetProgram": "DDS/DMD",
-    "preferredStates": ["Alaska", "New Jersey", "Georgia"],
+    "targetProgram": "I don't know (need guidance)",
+    "programIntentBadge": "Needs guidance",
+    "entryMode": "Pursue master's degree in U.S. first",
+    "preferredStates": ["Alabama", "Arizona", "Arkansas"],
     "visaStatus": "None",
     "mastersInterest": "Pursue master's degree",
     "loanCosigner": "No",
-    "inbdeStatus": "Yes",
-    "toeflScore": "5",
+    "inbdeStatus": "Passed",
+    "toeflScore": "band 5",
     "toeflLegacyEquivalent120": "100/120",
     "targetCycle": "2028"
   },
   "readinessScore": {
-    "overall": 68,
+    "overall": 55,
     "status": "Promising but not application-ready yet",
-    "strengths": [
-      "Passed INBDE early",
-      "3-4 years of home-country clinical experience",
-      "Clear DDS/DMD goal",
-      "2028 cycle gives adequate runway for profile optimization"
+    "dimensions": [
+      {"name": "Exam readiness (INBDE)", "score": 92, "status": "Strong", "statusColor": "green"},
+      {"name": "English (TOEFL band 5)", "score": 83, "status": "Strong", "statusColor": "green"},
+      {"name": "Clinical experience", "score": 65, "status": "Good", "statusColor": "teal"},
+      {"name": "Visa & immigration", "score": 8, "status": "Gap", "statusColor": "red"},
+      {"name": "Financial readiness", "score": 12, "status": "Gap", "statusColor": "red"},
+      {"name": "Program clarity", "score": 30, "status": "Unclear", "statusColor": "amber"}
     ],
-    "gaps": [
-      "No current visa pathway in place",
-      "No loan cosigner, so financing strategy must be built first",
-      "Needs stronger U.S.-aligned application positioning (SOP, LORs, U.S. exposure)"
-    ]
+    "strengths": ["INBDE passed", "Strong TOEFL score (band 5)", "Solid clinical experience"],
+    "gaps": ["No visa status", "No loan cosigner", "Unassessed target program"]
   },
   "pathwayRecommendation": {
-    "primaryPathway": "DDS/DMD",
-    "verdict": "DDS/DMD is the best-fit pathway for your profile, but you should optimize financing and U.S.-readiness before submitting applications.",
+    "primaryPathway": "DDS/DMD (International Dentist Program)",
+    "bestPathwayForYou": "DDS/DMD (International Dentist Program) with a master's degree bridge",
+    "verdict": "Pursue a master's degree in the U.S. to build academic credentials and secure F-1 status. With INBDE passed and TOEFL band 5, your exam profile is solid — the remaining blockers are visa and funding. The master's route solves both sequentially.",
+    "decisionNote": "Use the master's degree as a strategic bridge — not as a fallback. Every step in the master's must be mapped to DDS admission.",
+    "secondaryStrategy": "Consider GPR/AEGD residency for broader clinical exposure post-master's.",
+    "applicationPortal": "ADEA CAAPID",
     "whyThisFits": [
-      "INBDE passed removes a major eligibility barrier",
-      "3-4 years experience supports clinical maturity in holistic review",
-      "2028 timeline allows strategic preparation instead of rushed applications",
-      "DDS/DMD provides broad long-term licensure flexibility"
+      "INBDE passed, meeting a critical requirement for DDS/DMD programs",
+      "Strong TOEFL score supports communication skills needed for DDS/DMD",
+      "Master's degree aligns with interest and provides a clear F-1 visa pathway"
     ],
-    "secondaryStrategy": "Use a master's bridge only if it materially improves U.S. exposure, networking, and visa positioning without creating unsustainable financial burden."
+    "flipConditions": [
+      "If visa secured independently → direct DDS/DMD application becomes viable without master's bridge",
+      "If specialty interest clarified → specialty residency becomes a competitive option"
+    ],
+    "whyNotAlternatives": [
+      "No visa + no cosigner + unspecified specialty = insufficient profile for competitive residency right now",
+      "Direct residency revisit only after U.S. presence and sponsorship are established"
+    ],
+    "rankedPathways": [
+      {
+        "rank": 1,
+        "rankLabel": "1st",
+        "pathTitle": "DDS/DMD — International Dentist Program",
+        "fitSummary": "Best fit given INBDE + TOEFL. Master's degree clears the visa path. Broad U.S. practice opportunities post-graduation.",
+        "applicationPortal": "ADEA CAAPID",
+        "requirementsStillNeeded": ["Visa acquisition", "Credential evaluation (ECE)", "Program selection"],
+        "blockers": ["No visa status", "No loan cosigner"],
+        "realityCheck": "High tuition costs without a cosigner — research scholarships and international funding early.",
+        "bestUseCase": "For those seeking broad U.S. dental practice opportunities with maximum state flexibility.",
+        "isPrimary": true
+      },
+      {
+        "rank": 2,
+        "rankLabel": "2nd",
+        "pathTitle": "GPR / AEGD Residency",
+        "fitSummary": "Provides immediate clinical exposure and a licensure pathway in select states. Good complement to DDS/DMD, not a replacement.",
+        "applicationPortal": "ADEA PASS",
+        "requirementsStillNeeded": ["Visa sponsorship", "Program application"],
+        "blockers": ["Limited J-1 visa options", "Residency competition is high"],
+        "realityCheck": "J-1 visa competition is high; residency alone does not grant DDS/DMD equivalency.",
+        "bestUseCase": "For those seeking immediate clinical experience and potential licensure in select states.",
+        "isPrimary": false
+      },
+      {
+        "rank": 3,
+        "rankLabel": "3rd",
+        "pathTitle": "U.S. master's degree (MPH / MHA)",
+        "fitSummary": "Activates F-1 visa and builds U.S. academic credentials. Use as a stepping stone — not an end goal.",
+        "applicationPortal": "Institution-specific",
+        "requirementsStillNeeded": ["Program selection", "Funding plan"],
+        "blockers": ["Does not directly lead to dental licensure"],
+        "realityCheck": "Value is as a bridge, not a destination. Must be paired with a clear DDS application strategy.",
+        "bestUseCase": "For building U.S. academic and professional networks prior to CAAPID application.",
+        "isPrimary": false
+      }
+    ]
   },
   "mainRisks": [
     {
-      "issue": "Financing and cosigner constraints",
+      "issue": "Visa Acquisition",
       "impact": "High",
-      "note": "Cosigner response is 'No', which is a direct constraint for many private loan pathways.",
-      "evidenceBasis": "q6-loan-cosigner=No",
+      "impactColor": "red",
+      "note": "No visa means no U.S. study or work is currently possible. Securing F-1 through a master's enrollment is the clearest immediate path.",
+      "evidenceBasis": "Visa status: None",
       "assessmentType": "Evidence-Based"
     },
     {
-      "issue": "Visa pathway",
+      "issue": "Financial Planning",
       "impact": "High",
-      "note": "Visa response is 'None', so sequencing must account for F-1 pathway timing.",
-      "evidenceBasis": "q4-visa=None",
+      "impactColor": "red",
+      "note": "No loan cosigner limits access to private education loans. Begin researching international scholarships and institutional aid before applying.",
+      "evidenceBasis": "Loan cosigner: No",
       "assessmentType": "Evidence-Based"
     },
     {
-      "issue": "Application positioning",
+      "issue": "Target Program Clarity",
       "impact": "Medium",
-      "note": "INBDE is passed, but holistic review still depends on SOP/LOR/interview quality.",
-      "evidenceBasis": "q8-inbde=Yes plus holistic admissions process",
-      "assessmentType": "Evidence-Based"
-    },
-    {
-      "issue": "State alignment assumptions",
-      "impact": "Medium",
-      "note": "State preferences are valuable, but final licensure steps are board-specific and dynamic.",
-      "evidenceBasis": "q3-practice-states selected",
-      "assessmentType": "Evidence-Based"
+      "impactColor": "amber",
+      "note": "Candidate selected 'I don't know — need guidance.' The 2028 timeline allows space to clarify, but a decision is needed before mid-2027 application season.",
+      "evidenceBasis": "Target program: I don't know (need guidance)",
+      "assessmentType": "Inferred"
     }
   ],
   "next90DaysPlan": [
-    "Shortlist 8-10 DDS/DMD programs and map each against international financing options.",
-    "Start credential evaluation (ECE/WES) and collect all transcript/legalization documents.",
-    "Build a U.S.-style CV and draft a results-driven personal statement around 3 clinical case narratives.",
-    "Identify and brief 3 recommenders early with specific talking points about clinical judgment and professionalism.",
-    "Create a visa-ready document checklist (financial proof, timelines, and school sequencing).",
-    "Design a monthly execution tracker from now to CAAPID opening for the 2028 cycle."
+    "Research U.S. master's programs (MPH, MHA) aligned with dental career goals",
+    "Begin F-1 visa strategy — master's enrollment is the clearest path to U.S. entry",
+    "Start ECE credential evaluation through ECE or WES",
+    "Investigate international scholarships and funding sources for both master's and DDS",
+    "Network with foreign-trained dentists already in the U.S. to understand real pathways",
+    "Clarify program preference — DDS/DMD vs specialty — to sharpen application strategy"
   ],
   "next12To18Months": [
-    "Finalize school strategy by fit, funding viability, and realistic interview probability.",
-    "Strengthen application quality through targeted U.S. exposure (observership/research/shadowing where feasible).",
-    "Prepare school-specific supplementals and interview narratives well before deadlines.",
-    "Run a dual-track strategy: DDS/DMD primary, optional master's bridge only if it solves a clear gap.",
-    "Verify licensure implications for Alaska, New Jersey, and Georgia before final school decisions."
+    "Complete a U.S. master's degree to establish academic presence and activate F-1 status",
+    "Apply to DDS/DMD programs via ADEA CAAPID once enrolled and eligible",
+    "Consider GPR/AEGD residency applications for additional clinical exposure",
+    "Build a compelling personal statement and gather strong LORs from U.S. contacts",
+    "Prepare for bench tests and program interviews"
   ],
-  "questionnaireGrounding": [
+  "dentnavServices": {
+    "neededNow": [
+      {"service": "Visa guidance", "reason": "F-1 strategy via master's is the critical unblock", "timing": ""},
+      {"service": "DENTPIN creation", "reason": "First step before any ADEA portal", "timing": ""},
+      {"service": "ECE evaluation", "reason": "Required for ADEA CAAPID application", "timing": ""}
+    ],
+    "neededLater": [
+      {"service": "SOP, CV & recommendation letters", "reason": "Application season prep", "timing": "Early 2027"},
+      {"service": "Bench test training", "reason": "Required for most DDS/DMD IDP programs", "timing": "Mid 2027"},
+      {"service": "Mock interviews", "reason": "Critical for DDS/DMD program selection", "timing": "Mid 2027"},
+      {"service": "State licensure guidance", "reason": "Verify Alabama, Arizona, Arkansas boards", "timing": "Ongoing"}
+    ]
+  },
+  "applicationTimeline": [
+    {"period": "Now", "periodColor": "red", "milestone": "DENTPIN creation + visa strategy", "detail": "Create DENTPIN. Begin F-1 / master's research immediately — this is the critical path."},
+    {"period": "2025–26", "periodColor": "amber", "milestone": "Enrol in U.S. master's program", "detail": "Secure F-1 visa. Start ECE credential evaluation. Build observerships and U.S. network."},
+    {"period": "2026", "periodColor": "amber", "milestone": "U.S. exposure + profile build", "detail": "Complete observerships, community work, and any research. Strengthen SOP narrative."},
+    {"period": "Early 2027", "periodColor": "purple", "milestone": "SOP, CV & letters of recommendation", "detail": "Draft personal statement. Request LORs from U.S. contacts at least 6 months before portal opens."},
+    {"period": "Mid 2027", "periodColor": "purple", "milestone": "ADEA CAAPID application opens", "detail": "Submit DDS/DMD applications. Also consider ADEA PASS for GPR/AEGD if applicable."},
+    {"period": "Late 2027", "periodColor": "teal", "milestone": "Bench tests + interviews", "detail": "Program-specific practical assessments and interviews. DentNav mock interview prep recommended."}
+  ],
+  "mythWarnings": [
     {
-      "questionId": "q1-degree-country",
-      "answer": "India",
-      "pathwayInfluence": "Country context informs credential framing, not automatic eligibility."
+      "myth": "INBDE score determines which program I get",
+      "fact": "INBDE is reported pass/fail only. Your SOP, clinical background, bench test performance, and interview determine selection — not a numeric INBDE score."
     },
     {
-      "questionId": "q1b-degree-type",
-      "answer": "BDS",
-      "pathwayInfluence": "BDS aligns with foreign-trained dentist pathways evaluated via credential review."
+      "myth": "DDS/DMD automatically gives me a license in all 50 states",
+      "fact": "A degree qualifies you to apply for licensure. Each state board has its own requirements. Alabama, Arizona, and Arkansas must each be verified separately."
     },
     {
-      "questionId": "q2-target-program",
-      "answer": "DDS/DMD",
-      "pathwayInfluence": "Primary recommendation anchored to stated target pathway."
-    },
-    {
-      "questionId": "q3-practice-states",
-      "answer": "Alaska, New Jersey, Georgia",
-      "pathwayInfluence": "State preferences shape long-term licensing and school selection strategy."
-    },
-    {
-      "questionId": "q4-visa",
-      "answer": "None",
-      "pathwayInfluence": "No current visa affects sequencing and near-term feasibility."
-    },
-    {
-      "questionId": "q5-masters-vs-home",
-      "answer": "Pursue master's degree",
-      "pathwayInfluence": "Master's willingness enables bridge strategy if needed."
-    },
-    {
-      "questionId": "q6-loan-cosigner",
-      "answer": "No",
-      "pathwayInfluence": "Cosigner absence is a direct financing constraint signal."
-    },
-    {
-      "questionId": "q7-clinical-years",
-      "answer": "3-4 years",
-      "pathwayInfluence": "Clinical experience supports profile maturity."
-    },
-    {
-      "questionId": "q8-inbde",
-      "answer": "Yes",
-      "pathwayInfluence": "INBDE pass removes a major eligibility barrier."
-    },
-    {
-      "questionId": "q9-toefl",
-      "answer": "5",
-      "pathwayInfluence": "TOEFL band indicates strong English readiness."
-    },
-    {
-      "questionId": "q10-start-cycle",
-      "answer": "2028",
-      "pathwayInfluence": "Longer runway allows strategic profile building before applying."
+      "myth": "Completing DDS leads to a green card",
+      "fact": "Immigration outcomes depend on visa category and employer sponsorship — not the dental degree. Plan immigration independently of your dental pathway."
     }
   ],
-  "assessmentBoundaries": [
-    "Detailed budget and proof-of-funds were not collected.",
-    "GPA/class rank and full transcript metrics were not collected.",
-    "Bench test performance and interview readiness were not directly collected.",
-    "Depth of U.S. observership/research exposure was not directly collected."
-  ],
-  "statePlanningNote": "There is no universal licensure route. Your preferred states are useful planning signals, but state rules vary and may change; verify directly with each dental board.",
-  "expertConclusion": "You are a viable future DDS/DMD candidate with strong upside, but admission outcomes will depend more on financing clarity and execution quality than on additional exam work right now.",
-  "Country": "India",
-  "degree": "BDS",
-  "yearsOfExp": "3-4 years",
-  "Performance": 68
+  "statePlanning": {
+    "note": "State licensure is state-specific and must be verified with boards. Alabama, Arizona, and Arkansas have varying requirements.",
+    "states": [
+      {"name": "Alabama", "notes": "State-specific board requirements. Verify ADEX or regional clinical exam acceptance with Alabama Dental Board.", "competitiveness": "Moderate"},
+      {"name": "Arizona", "notes": "Accepts WREB/ADEX in most pathways. Active dental market. Verify current rules with Arizona State Board.", "competitiveness": "Moderate-High"},
+      {"name": "Arkansas", "notes": "Less competitive market. Distinct board requirements. May suit candidates open to less saturated locations.", "competitiveness": "Low-Moderate"}
+    ]
+  },
+  "statePlanningNote": "State licensure is state-specific and must be verified with boards. Alabama, Arizona, and Arkansas have varying requirements.",
+  "expertConclusion": "With INBDE passed and a strong TOEFL score, you are better positioned than most applicants at this stage. The two blockers — visa and financial planning — are solvable with the right strategy. The 2028 target gives you enough runway to complete a U.S. master's, secure F-1 status, build your profile, and enter the CAAPID cycle competitively. Start with visa and DENTPIN — everything else follows from there."
 }

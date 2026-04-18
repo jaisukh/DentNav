@@ -451,11 +451,37 @@ def _list_of_strings(value: Any) -> list[str]:
     return []
 
 
+def _is_unassessed_text(value: str) -> bool:
+    s = value.strip().lower()
+    return s in {
+        "unassessed",
+        "not assessed",
+        "not specified",
+        "unknown",
+        "n/a",
+        "na",
+        "not provided",
+    }
+
+
+def _impact_color(impact: str) -> str:
+    i = impact.strip().lower()
+    if i == "high":
+        return "red"
+    if i == "medium":
+        return "amber"
+    if i == "low":
+        return "green"
+    return "gray"
+
+
 def _normalize_risk_item(raw: Any) -> dict[str, str]:
     if isinstance(raw, dict):
+        impact = str(raw.get("impact", "")).strip()
         return {
             "issue": str(raw.get("issue", "")).strip(),
-            "impact": str(raw.get("impact", "")).strip(),
+            "impact": impact,
+            "impactColor": str(raw.get("impactColor", "")).strip() or _impact_color(impact),
             "note": str(raw.get("note", "")).strip(),
             "evidenceBasis": str(raw.get("evidenceBasis", "")).strip(),
             "assessmentType": str(raw.get("assessmentType", "")).strip(),
@@ -463,9 +489,100 @@ def _normalize_risk_item(raw: Any) -> dict[str, str]:
     return {
         "issue": "",
         "impact": "",
+        "impactColor": "",
         "note": "",
         "evidenceBasis": "",
         "assessmentType": "",
+    }
+
+
+def _normalize_ranked_pathway(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {
+            "rank": 0,
+            "rankLabel": "",
+            "pathTitle": "",
+            "fitSummary": "",
+            "applicationPortal": "",
+            "requirementsStillNeeded": [],
+            "blockers": [],
+            "realityCheck": "",
+            "bestUseCase": "",
+            "isPrimary": False,
+        }
+    rank_raw = raw.get("rank", 0)
+    rank_int = int(_extract_number(rank_raw) or 0)
+    rank_labels = {1: "1st", 2: "2nd", 3: "3rd"}
+    rank_label = str(raw.get("rankLabel", "")).strip() or rank_labels.get(rank_int, str(rank_int))
+    return {
+        "rank": rank_int,
+        "rankLabel": rank_label,
+        "pathTitle": str(raw.get("pathTitle", "")).strip(),
+        "fitSummary": str(raw.get("fitSummary", "")).strip(),
+        "applicationPortal": str(raw.get("applicationPortal", "")).strip(),
+        "requirementsStillNeeded": _list_of_strings(raw.get("requirementsStillNeeded")),
+        "blockers": _list_of_strings(raw.get("blockers")),
+        "realityCheck": str(raw.get("realityCheck", "")).strip(),
+        "bestUseCase": str(raw.get("bestUseCase", "")).strip(),
+        "isPrimary": bool(raw.get("isPrimary", rank_int == 1)),
+    }
+
+
+def _normalize_service_need_item(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {"service": "", "reason": "", "timing": ""}
+    return {
+        "service": str(raw.get("service", "")).strip(),
+        "reason": str(raw.get("reason", "")).strip(),
+        "timing": str(raw.get("timing", "")).strip(),
+    }
+
+
+def _normalize_timeline_milestone(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {"period": "", "periodColor": "", "milestone": "", "detail": ""}
+    # Accept both old field names (window/title) and new ones (period/milestone)
+    period = str(raw.get("period", "") or raw.get("window", "")).strip()
+    milestone = str(raw.get("milestone", "") or raw.get("title", "")).strip()
+    return {
+        "period": period,
+        "periodColor": str(raw.get("periodColor", "")).strip(),
+        "milestone": milestone,
+        "detail": str(raw.get("detail", "")).strip(),
+    }
+
+
+def _normalize_myth_warning_item(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {"myth": "", "fact": ""}
+    return {
+        "myth": str(raw.get("myth", "")).strip(),
+        "fact": str(raw.get("fact", "")).strip(),
+    }
+
+
+def _normalize_state_planning_state(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {"name": "", "notes": "", "competitiveness": ""}
+    # Accept both old shape (state/guidance) and new shape (name/notes/competitiveness)
+    name = str(raw.get("name", "") or raw.get("state", "")).strip()
+    notes = str(raw.get("notes", "") or raw.get("guidance", "")).strip()
+    return {
+        "name": name,
+        "notes": notes,
+        "competitiveness": str(raw.get("competitiveness", "")).strip(),
+    }
+
+
+def _normalize_readiness_dimension(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {"name": "", "score": 0, "status": "", "statusColor": ""}
+    score_raw = _extract_number(raw.get("score", 0))
+    return {
+        "name": str(raw.get("name", "")).strip(),
+        "score": int(max(0, min(100, round(score_raw or 0)))),
+        "status": str(raw.get("status", "")).strip(),
+        "statusColor": str(raw.get("statusColor", "")).strip(),
     }
 
 
@@ -479,40 +596,269 @@ def _default_readiness_status(score: int) -> str:
     return "Early stage profile; foundational gaps must be closed first"
 
 
-def _build_questionnaire_grounding(answers: AnswerMap) -> list[dict[str, str]]:
-    """Evidence ledger tied only to questionnaire inputs."""
-    mapping: list[tuple[str, str]] = [
-        ("q1-degree-country", "Degree country influences pathway context and credential comparability framing."),
-        ("q1b-degree-type", "Degree type anchors eligibility framing for FTD pathways."),
-        ("q2-target-program", "Target program determines the primary pathway recommendation."),
-        ("q3-practice-states", "State preferences shape licensure planning and school strategy."),
-        ("q4-visa", "Visa status affects near-term feasibility and sequencing."),
-        ("q5-masters-vs-home", "Master's willingness changes bridge strategy options."),
-        ("q6-loan-cosigner", "Cosigner availability is a partial financing signal (not full financial profile)."),
-        ("q7-clinical-years", "Clinical years contribute to competitiveness and narrative strength."),
-        ("q8-inbde", "INBDE status is a major readiness signal for many pathways."),
-        ("q9-toefl", "TOEFL band indicates English readiness (1–6 scale)."),
-        ("q10-start-cycle", "Target cycle defines urgency and roadmap pacing."),
-    ]
-    ledger: list[dict[str, str]] = []
-    for qid, influence in mapping:
-        raw = answers.get(qid, "")
-        if isinstance(raw, list):
-            answer = ", ".join(str(x) for x in raw if str(x).strip()) or "Not provided"
-        else:
-            answer = str(raw).strip() or "Not provided"
-        ledger.append({"questionId": qid, "answer": answer, "pathwayInfluence": influence})
-    return ledger
+def _fallback_ranked_pathways(
+    profile_snapshot: dict[str, Any],
+    pathway: dict[str, Any],
+    risks: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    visa = str(profile_snapshot.get("visaStatus", "")).strip() or "Not specified"
+    cosigner = str(profile_snapshot.get("loanCosigner", "")).strip() or "Not specified"
+    toefl = str(profile_snapshot.get("toeflScore", "")).strip() or "Not specified"
+    primary = pathway.get("primaryPathway") or "DDS/DMD (International Dentist Program)"
+    secondary = pathway.get("secondaryStrategy") or "Master's -> DDS bridge strategy"
 
+    has_financial_risk = any(
+        "financ" in str(r.get("issue", "")).lower() or "loan" in str(r.get("issue", "")).lower()
+        for r in risks
+    )
+    financial_blocker = "No confirmed funding route yet" if has_financial_risk else "Funding specifics still unassessed"
 
-def _assessment_boundaries_default() -> list[str]:
     return [
-        "Detailed budget, liquid funds, and tuition affordability were not collected.",
-        "Academic GPA/class rank and transcript detail were not collected.",
-        "Bench test performance and interview readiness were not directly collected.",
-        "Research/publication depth and U.S. exposure quality were not directly collected.",
-        "Final licensure eligibility must be verified with each state board.",
+        {
+            "rank": "🥇",
+            "pathTitle": primary,
+            "fitSummary": "Best long-term licensure flexibility if admission profile is fully strengthened.",
+            "requirementsStillNeeded": [
+                "Program-ready application package (SOP + LORs + school fit list)",
+                "Verified financing route aligned to total program cost",
+                "Timeline-aligned visa and admissions execution plan",
+            ],
+            "blockers": [
+                f"Current visa status: {visa}",
+                f"Cosigner status: {cosigner}",
+                financial_blocker,
+            ],
+            "realityCheck": "High-upside route, but outcomes depend on execution quality and affordability planning.",
+            "bestUseCase": "Choose this when you can build a complete, finance-ready application profile.",
+        },
+        {
+            "rank": "🥈",
+            "pathTitle": secondary,
+            "fitSummary": "Most practical bridge when direct DDS competitiveness or logistics are not fully ready.",
+            "requirementsStillNeeded": [
+                "Select master's programs that improve DDS readiness signals",
+                "Build U.S.-anchored recommendations and academic narrative",
+                "Convert bridge outcomes into a targeted DDS reapplication strategy",
+            ],
+            "blockers": [
+                "Master's choice must directly support downstream DDS positioning",
+                "Adds time and cost if chosen without a DDS-backward plan",
+            ],
+            "realityCheck": "Excellent strategy only when each master's milestone maps to a DDS outcome.",
+            "bestUseCase": "Best for candidates needing profile strengthening with structured timeline advantage.",
+        },
+        {
+            "rank": "🥉",
+            "pathTitle": "State-specific non-DDS/licensure alternatives",
+            "fitSummary": "Useful as an exploratory track, but limited portability and high variability by board.",
+            "requirementsStillNeeded": [
+                "Board-by-board verification for every target state",
+                "Contingency planning if rules shift or eligibility narrows",
+            ],
+            "blockers": [
+                "No universal acceptance across states",
+                "Policy and pathway variability can delay outcomes",
+            ],
+            "realityCheck": "Treat as a constrained option, not a default primary route.",
+            "bestUseCase": "Use when a specific state pathway is clearly confirmed and time-feasible.",
+        },
     ]
+
+
+def _fallback_dentnav_services(profile_snapshot: dict[str, Any]) -> dict[str, list[dict[str, str]]]:
+    visa = str(profile_snapshot.get("visaStatus", "")).strip().lower()
+    target_program = str(profile_snapshot.get("targetProgram", "")).strip() or "Target program"
+    preferred_states = _list_of_strings(profile_snapshot.get("preferredStates"))
+    states_text = ", ".join(preferred_states) if preferred_states else "preferred states"
+
+    needed_now: list[dict[str, str]] = [
+        {
+            "service": "Visa strategy guidance",
+            "reason": (
+                "F-1 strategy via master's is the critical unblock"
+                if visa in {"none", "not specified", "unknown"}
+                else "Current visa type should be mapped to education and licensing timeline constraints."
+            ),
+            "timing": "",
+        },
+        {
+            "service": "DENTPIN creation",
+            "reason": "First step before any ADEA portal",
+            "timing": "",
+        },
+        {
+            "service": "ECE evaluation",
+            "reason": "Required for ADEA CAAPID application",
+            "timing": "",
+        },
+    ]
+
+    needed_later: list[dict[str, str]] = [
+        {
+            "service": "SOP, CV & recommendation letters",
+            "reason": "Application season prep",
+            "timing": "Early 2027",
+        },
+        {
+            "service": "Bench test training",
+            "reason": "Required for most DDS/DMD IDP programs",
+            "timing": "Mid 2027",
+        },
+        {
+            "service": "Mock interviews",
+            "reason": "Critical for DDS/DMD program selection",
+            "timing": "Mid 2027",
+        },
+        {
+            "service": f"State licensure guidance",
+            "reason": f"Verify {states_text} boards",
+            "timing": "Ongoing",
+        },
+    ]
+    return {"neededNow": needed_now, "neededLater": needed_later}
+
+
+def _fallback_application_timeline(profile_snapshot: dict[str, Any]) -> list[dict[str, str]]:
+    cycle = str(profile_snapshot.get("targetCycle", "")).strip() or "target cycle"
+    app_year = str(int(cycle) - 1) if cycle.isdigit() else "year before cycle"
+    return [
+        {
+            "period": "Now",
+            "periodColor": "red",
+            "milestone": "DENTPIN creation + visa strategy",
+            "detail": "Create DENTPIN. Begin F-1 / master's research immediately — this is the critical path.",
+        },
+        {
+            "period": "Next 6-12 months",
+            "periodColor": "amber",
+            "milestone": "Enrol in U.S. master's program",
+            "detail": "Secure F-1 visa. Start ECE credential evaluation. Build observerships and U.S. network.",
+        },
+        {
+            "period": f"Early {app_year}",
+            "periodColor": "purple",
+            "milestone": "SOP, CV & letters of recommendation",
+            "detail": "Draft personal statement. Request LORs from U.S. contacts at least 6 months before portal opens.",
+        },
+        {
+            "period": f"Mid {app_year}",
+            "periodColor": "purple",
+            "milestone": "ADEA CAAPID application opens",
+            "detail": "Submit DDS/DMD applications. Also consider ADEA PASS for GPR/AEGD if applicable.",
+        },
+        {
+            "period": f"Late {app_year}",
+            "periodColor": "teal",
+            "milestone": "Bench tests + interviews",
+            "detail": "Program-specific practical assessments and interviews. DentNav mock interview prep recommended.",
+        },
+    ]
+
+
+def _fallback_myth_warnings(profile_snapshot: dict[str, Any]) -> list[dict[str, str]]:
+    states = _list_of_strings(profile_snapshot.get("preferredStates"))
+    states_note = ", ".join(states) if states else "your target states"
+    return [
+        {
+            "myth": "INBDE score determines which program I get",
+            "fact": "INBDE is reported pass/fail only. Your SOP, clinical background, bench test performance, and interview determine selection — not a numeric INBDE score.",
+        },
+        {
+            "myth": "DDS/DMD automatically gives me a license in all 50 states",
+            "fact": f"A degree qualifies you to apply for licensure. Each state board has its own requirements. {states_note} must each be verified separately.",
+        },
+        {
+            "myth": "Completing DDS leads to a green card",
+            "fact": "Immigration outcomes depend on visa category and employer sponsorship — not the dental degree. Plan immigration independently of your dental pathway.",
+        },
+    ]
+
+
+def _compute_readiness_dimensions(answers: dict[str, Any]) -> list[dict[str, Any]]:
+    """Derive 6-dimension readiness bars from questionnaire signals."""
+    toefl_raw = str(answers.get("q9-toefl", "")).strip()
+    inbde_raw = str(answers.get("q8-inbde", "")).strip().lower()
+    years_raw = str(answers.get("q7-clinical-years", "")).strip()
+    visa_raw = str(answers.get("q4-visa", "")).strip().lower()
+    cosigner_raw = str(answers.get("q6-loan-cosigner", "")).strip().lower()
+    target_raw = str(answers.get("q2-target-program", "")).strip().lower()
+
+    # INBDE
+    inbde_score = 92 if inbde_raw == "yes" else 20
+    inbde_status = ("Strong", "green") if inbde_score >= 80 else ("Gap", "red")
+
+    # TOEFL
+    toefl_n = _extract_number(toefl_raw)
+    if toefl_n is None:
+        toefl_score, toefl_status = 40, ("Unclear", "amber")
+    elif toefl_n >= 5.0:
+        toefl_score, toefl_status = 83, ("Strong", "green")
+    elif toefl_n >= 4.5:
+        toefl_score, toefl_status = 70, ("Good", "teal")
+    elif toefl_n >= 4.0:
+        toefl_score, toefl_status = 50, ("Borderline", "amber")
+    else:
+        toefl_score, toefl_status = 20, ("Gap", "red")
+
+    # Clinical experience
+    years = _clinical_years_score_component(years_raw) if years_raw else 0.0
+    if years >= 7:
+        clin_score, clin_status = 90, ("Strong", "green")
+    elif years >= 4:
+        clin_score, clin_status = 65, ("Good", "teal")
+    elif years >= 2:
+        clin_score, clin_status = 45, ("Fair", "amber")
+    else:
+        clin_score, clin_status = 20, ("Gap", "red")
+
+    # Visa
+    has_visa = visa_raw not in {"none", "not specified", "unknown", ""}
+    visa_score = 70 if has_visa else 8
+    visa_status = ("Active", "green") if has_visa else ("Gap", "red")
+
+    # Financial
+    has_cosigner = cosigner_raw == "yes"
+    fin_score = 60 if has_cosigner else 12
+    fin_status = ("Supported", "green") if has_cosigner else ("Gap", "red")
+
+    # Program clarity
+    if "i don't know" in target_raw or "guidance" in target_raw or not target_raw:
+        prog_score, prog_status = 30, ("Unclear", "amber")
+    else:
+        prog_score, prog_status = 80, ("Clear", "green")
+
+    toefl_label = f"English (TOEFL band {toefl_raw})" if toefl_raw else "English (TOEFL)"
+    return [
+        {"name": "Exam readiness (INBDE)", "score": inbde_score, "status": inbde_status[0], "statusColor": inbde_status[1]},
+        {"name": toefl_label, "score": toefl_score, "status": toefl_status[0], "statusColor": toefl_status[1]},
+        {"name": "Clinical experience", "score": clin_score, "status": clin_status[0], "statusColor": clin_status[1]},
+        {"name": "Visa & immigration", "score": visa_score, "status": visa_status[0], "statusColor": visa_status[1]},
+        {"name": "Financial readiness", "score": fin_score, "status": fin_status[0], "statusColor": fin_status[1]},
+        {"name": "Program clarity", "score": prog_score, "status": prog_status[0], "statusColor": prog_status[1]},
+    ]
+
+
+def _fallback_state_planning(profile_snapshot: dict[str, Any]) -> dict[str, Any]:
+    states = _list_of_strings(profile_snapshot.get("preferredStates"))[:3]
+    if not states:
+        states = ["Preferred State 1", "Preferred State 2", "Preferred State 3"]
+    state_cards = [
+        {
+            "name": state,
+            "notes": (
+                "Board requirements are state-specific. Verify accepted exam pathway, eligibility criteria, "
+                "and latest licensure policy directly with the official board."
+            ),
+            "competitiveness": "Verify with board",
+        }
+        for state in states
+    ]
+    return {
+        "note": (
+            f"State licensure is non-uniform across the U.S. Verify directly with each board for {', '.join(states)}."
+        ),
+        "states": state_cards,
+    }
 
 
 def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str, Any]:
@@ -556,14 +902,32 @@ def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str,
                 if normalized_states:
                     profile_snapshot[key] = normalized_states
             elif val is not None and str(val).strip():
-                profile_snapshot[key] = str(val).strip()
+                candidate = str(val).strip()
+                # Never let model replace known questionnaire values with "Unassessed".
+                if key in {
+                    "country",
+                    "degree",
+                    "clinicalExperience",
+                    "targetProgram",
+                    "visaStatus",
+                    "mastersInterest",
+                    "loanCosigner",
+                    "inbdeStatus",
+                    "toeflScore",
+                    "targetCycle",
+                } and not _is_unassessed_text(profile_snapshot_default.get(key, "")):
+                    if _is_unassessed_text(candidate):
+                        continue
+                profile_snapshot[key] = candidate
 
     performance = _extract_performance_score(parsed, answers)
 
+    # ── readinessScore ──────────────────────────────────────────────────────
     readiness_raw = parsed.get("readinessScore", {})
     readiness_status = _default_readiness_status(performance)
     readiness_strengths: list[str] = []
     readiness_gaps: list[str] = []
+    readiness_dimensions: list[dict[str, Any]] = []
     if isinstance(readiness_raw, dict):
         maybe_overall = _extract_number(readiness_raw.get("overall"))
         if maybe_overall is not None:
@@ -572,39 +936,62 @@ def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str,
             readiness_status = str(readiness_raw.get("status")).strip()
         readiness_strengths = _list_of_strings(readiness_raw.get("strengths"))
         readiness_gaps = _list_of_strings(readiness_raw.get("gaps"))
+        dims_raw = readiness_raw.get("dimensions", [])
+        if isinstance(dims_raw, list):
+            readiness_dimensions = [
+                _normalize_readiness_dimension(d) for d in dims_raw
+                if isinstance(d, dict) and (d.get("name") or d.get("score") is not None)
+            ]
+    if not readiness_dimensions:
+        readiness_dimensions = _compute_readiness_dimensions(answers)
 
+    # ── pathwayRecommendation ───────────────────────────────────────────────
     pathway_raw = parsed.get("pathwayRecommendation", {})
-    pathway = {
+    pathway: dict[str, Any] = {
         "primaryPathway": "",
+        "bestPathwayForYou": "",
         "verdict": "",
-        "whyThisFits": [],
+        "decisionNote": "",
         "secondaryStrategy": "",
+        "applicationPortal": "",
+        "whyThisFits": [],
+        "flipConditions": [],
+        "whyNotAlternatives": [],
+        "rankedPathways": [],
     }
     if isinstance(pathway_raw, dict):
         pathway["primaryPathway"] = str(pathway_raw.get("primaryPathway", "")).strip()
+        pathway["bestPathwayForYou"] = str(pathway_raw.get("bestPathwayForYou", "")).strip()
         pathway["verdict"] = str(pathway_raw.get("verdict", "")).strip()
-        pathway["whyThisFits"] = _list_of_strings(pathway_raw.get("whyThisFits"))
+        pathway["decisionNote"] = str(pathway_raw.get("decisionNote", "")).strip()
         pathway["secondaryStrategy"] = str(pathway_raw.get("secondaryStrategy", "")).strip()
+        pathway["applicationPortal"] = str(pathway_raw.get("applicationPortal", "")).strip()
+        pathway["whyThisFits"] = _list_of_strings(pathway_raw.get("whyThisFits"))
+        pathway["flipConditions"] = _list_of_strings(pathway_raw.get("flipConditions"))
+        pathway["whyNotAlternatives"] = _list_of_strings(pathway_raw.get("whyNotAlternatives"))
+        ranked_raw = pathway_raw.get("rankedPathways", [])
+        if isinstance(ranked_raw, list):
+            ranked_items = [_normalize_ranked_pathway(item) for item in ranked_raw]
+            pathway["rankedPathways"] = [
+                item for item in ranked_items if item["pathTitle"] or item["fitSummary"]
+            ]
 
-    risks: list[dict[str, str]] = []
+    # ── mainRisks ──────────────────────────────────────────────────────────
+    risks: list[dict[str, Any]] = []
     for item in parsed.get("mainRisks", []) if isinstance(parsed.get("mainRisks", []), list) else []:
         risk = _normalize_risk_item(item)
         if risk["issue"] or risk["note"]:
             issue_l = risk["issue"].lower()
             # Prevent overclaiming when we do not have full financial details.
-            if ("financ" in issue_l or "loan" in issue_l or "cosigner" in issue_l) and not cosigner_raw:
-                risk["impact"] = "Unassessed"
-                risk["assessmentType"] = "Unassessed"
-                risk["note"] = (
-                    "Only partial financing data is available from questionnaire. "
-                    "Treat this as unassessed until budget/funding details are collected."
-                )
+            if ("financ" in issue_l or "loan" in issue_l or "cosigner" in issue_l) and cosigner_raw.lower() == "no":
+                risk["impactColor"] = "red"
             # Prevent false English blocker when TOEFL is already competitive.
             if "english" in issue_l or "toefl" in issue_l:
                 n = _extract_number(toefl_raw)
                 if n is not None and n >= 4.5:
                     if risk["impact"].lower() in {"high", "critical"}:
                         risk["impact"] = "Low"
+                        risk["impactColor"] = "green"
                     if not risk["assessmentType"]:
                         risk["assessmentType"] = "Evidence-Based"
                     if "strength" not in risk["note"].lower():
@@ -612,18 +999,115 @@ def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str,
                             "TOEFL band is at/above threshold; English is not a major blocker "
                             "based on collected inputs."
                         )
+            if not risk["impactColor"]:
+                risk["impactColor"] = _impact_color(risk["impact"])
             risks.append(risk)
 
+    # ── pathway fallbacks ───────────────────────────────────────────────────
+    if not pathway["rankedPathways"]:
+        pathway["rankedPathways"] = _fallback_ranked_pathways(profile_snapshot, pathway, risks)
+    if not pathway["bestPathwayForYou"]:
+        pathway["bestPathwayForYou"] = (
+            pathway["rankedPathways"][0]["pathTitle"] if pathway["rankedPathways"] else pathway["primaryPathway"]
+        )
+    if not pathway["decisionNote"]:
+        pathway["decisionNote"] = (
+            "Prioritize the highest-upside route only if current blockers are actively managed; "
+            "otherwise execute the bridge pathway with discipline."
+        )
+
+    # ── next90DaysPlan / next12To18Months ──────────────────────────────────
     next_90_days = _list_of_strings(parsed.get("next90DaysPlan"))
     next_12_18_months = _list_of_strings(parsed.get("next12To18Months"))
-    state_planning_note = str(parsed.get("statePlanningNote", "")).strip()
+
+    # ── dentnavServices ────────────────────────────────────────────────────
+    dentnav_services: dict[str, Any] = {"neededNow": [], "neededLater": []}
+    dentnav_services_raw = parsed.get("dentnavServices", {})
+    if isinstance(dentnav_services_raw, dict):
+        now_items = dentnav_services_raw.get("neededNow", [])
+        if isinstance(now_items, list):
+            dentnav_services["neededNow"] = [
+                item for item in [_normalize_service_need_item(i) for i in now_items]
+                if item["service"] or item["reason"]
+            ]
+        # accept both field names
+        later_items = dentnav_services_raw.get("neededLater", []) or dentnav_services_raw.get("neededAt12To18Months", [])
+        if isinstance(later_items, list):
+            dentnav_services["neededLater"] = [
+                item for item in [_normalize_service_need_item(i) for i in later_items]
+                if item["service"] or item["reason"]
+            ]
+    if not dentnav_services["neededNow"] and not dentnav_services["neededLater"]:
+        dentnav_services = _fallback_dentnav_services(profile_snapshot)
+
+    # ── applicationTimeline ────────────────────────────────────────────────
+    application_timeline: list[dict[str, str]] = []
+    timeline_raw = parsed.get("applicationTimeline", [])
+    if isinstance(timeline_raw, list):
+        timeline_items = [_normalize_timeline_milestone(item) for item in timeline_raw]
+        application_timeline = [
+            item for item in timeline_items if item["period"] or item["milestone"] or item["detail"]
+        ]
+    if not application_timeline:
+        application_timeline = _fallback_application_timeline(profile_snapshot)
+
+    # ── mythWarnings (accept both old and new key names) ───────────────────
+    myth_warnings: list[dict[str, str]] = []
+    myths_raw = parsed.get("mythWarnings", []) or parsed.get("commonMyths", [])
+    if isinstance(myths_raw, list):
+        myth_warnings = [
+            item for item in [_normalize_myth_warning_item(i) for i in myths_raw]
+            if item["myth"] or item["fact"]
+        ]
+    if not myth_warnings:
+        myth_warnings = _fallback_myth_warnings(profile_snapshot)
+
+    # ── statePlanning ──────────────────────────────────────────────────────
+    state_planning: dict[str, Any] = {"note": "", "states": []}
+    state_planning_raw = parsed.get("statePlanning", {})
+    if isinstance(state_planning_raw, dict):
+        state_planning["note"] = str(state_planning_raw.get("note", "") or state_planning_raw.get("overallNote", "")).strip()
+        # accept both new (states) and old (cards) key names
+        states_raw_list = state_planning_raw.get("states", []) or state_planning_raw.get("cards", [])
+        if isinstance(states_raw_list, list):
+            state_planning["states"] = [
+                item for item in [_normalize_state_planning_state(i) for i in states_raw_list]
+                if item["name"] or item["notes"]
+            ]
+    if not state_planning["states"]:
+        state_planning = _fallback_state_planning(profile_snapshot)
+
+    state_planning_note = str(parsed.get("statePlanningNote", "")).strip() or state_planning.get("note", "")
+
     expert_conclusion = str(parsed.get("expertConclusion", "")).strip()
-    assessment_boundaries = _list_of_strings(parsed.get("assessmentBoundaries"))
-    if not assessment_boundaries:
-        assessment_boundaries = _assessment_boundaries_default()
-    questionnaire_grounding = parsed.get("questionnaireGrounding", [])
-    if not isinstance(questionnaire_grounding, list) or not questionnaire_grounding:
-        questionnaire_grounding = _build_questionnaire_grounding(answers)
+
+    # ── profileSnapshot extra fields ───────────────────────────────────────
+    target_lower = target_program_raw.lower()
+    if "i don't know" in target_lower or "guidance" in target_lower:
+        program_intent_badge = "Needs guidance"
+    elif target_program_raw:
+        program_intent_badge = "Defined"
+    else:
+        program_intent_badge = "Not specified"
+
+    masters_lower = masters_raw.lower()
+    if "master" in masters_lower:
+        entry_mode = "Pursue master's degree in U.S. first"
+    elif "home" in masters_lower or "abroad" in masters_lower:
+        entry_mode = "Apply from home country"
+    else:
+        entry_mode = masters_raw or "Not specified"
+
+    if isinstance(parsed.get("profileSnapshot"), dict):
+        profile_snapshot["programIntentBadge"] = str(
+            parsed["profileSnapshot"].get("programIntentBadge", "")
+        ).strip() or program_intent_badge
+        profile_snapshot["entryMode"] = str(
+            parsed["profileSnapshot"].get("entryMode", "")
+        ).strip() or entry_mode
+    else:
+        profile_snapshot["programIntentBadge"] = program_intent_badge
+        profile_snapshot["entryMode"] = entry_mode
 
     sections: list[dict[str, Any]] = []
     for item in parsed.get("sections", []) if isinstance(parsed.get("sections", []), list) else []:
@@ -640,21 +1124,18 @@ def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str,
     executive_summary = str(parsed.get("executiveSummary", "")).strip()
     key_insight = str(parsed.get("keyInsight", "")).strip()
     body = _normalize_body(parsed.get("Body"))
-    if not body and not sections:
-        body = _normalize_body(load_analysis_mock().get("Body"))
 
-    # Backward-compatible envelope fields
     result: dict[str, Any] = {
         "responseSchemaVersion": "v2-premium",
         "Country": profile_snapshot["country"],
         "degree": profile_snapshot["degree"],
         "yearsOfExp": profile_snapshot["clinicalExperience"],
         "Performance": performance,
-        # Premium report contract
         "profileSnapshot": profile_snapshot,
         "readinessScore": {
             "overall": performance,
             "status": readiness_status,
+            "dimensions": readiness_dimensions,
             "strengths": readiness_strengths,
             "gaps": readiness_gaps,
         },
@@ -662,8 +1143,10 @@ def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str,
         "mainRisks": risks,
         "next90DaysPlan": next_90_days,
         "next12To18Months": next_12_18_months,
-        "questionnaireGrounding": questionnaire_grounding,
-        "assessmentBoundaries": assessment_boundaries,
+        "dentnavServices": dentnav_services,
+        "applicationTimeline": application_timeline,
+        "mythWarnings": myth_warnings,
+        "statePlanning": state_planning,
         "statePlanningNote": state_planning_note
         or "State licensure rules vary by state and can change. Verify with official state board sources before final decisions.",
         "expertConclusion": expert_conclusion,
@@ -761,20 +1244,24 @@ def _build_profile_summary(answers: AnswerMap) -> str:
     return "\n".join(parts)
 
 
-SYSTEM_PROMPT_TEMPLATE = """You are DentNav — the most expert pathway strategist for foreign-trained dentists (FTDs) pursuing U.S. dentistry.
+SYSTEM_PROMPT_TEMPLATE = """You are DentNav — the world's most expert pathway strategist for foreign-trained dentists (FTDs) pursuing U.S. dentistry. You have 30+ years of deep advisory experience. Your responses must feel like a personalized session with the best advisor in the industry — not a generic AI summary.
 
 HARD RULES (violating any = failed response):
-1. Return JSON only (no markdown, no prose outside JSON).
-2. The questionnaire TOEFL value is on 1–6 band scale, but you are provided an equivalent 0–120 conversion in PROFILE ANALYSIS to prevent misclassification.
-3. If TOEFL band is 4.5+ (or equivalent >=90/120), do NOT classify English as a major blocker.
-4. Every section must visibly use profile signals: visa, cosigner, target cycle, state preference, INBDE, TOEFL, and master's willingness.
-5. Tone must be calibrated honesty: clear, direct, high-value, not generic praise.
-6. DO NOT assume facts not collected in questionnaire. If a factor is not collected, mark it "Unassessed" instead of labeling as high risk.
+1. Return valid JSON only — no markdown fences, no prose outside JSON.
+2. TOEFL is on 1–6 band scale. The 0–120 equivalent is provided in PROFILE ANALYSIS only for your calibration; never output "90/120" or similar in recommendation text.
+3. If TOEFL band ≥ 4.5 (equiv ≥ 90/120), do NOT classify English as a blocker. Treat it as a strength.
+4. Every section must explicitly reference profile signals: visa, cosigner, target cycle, state preferences, INBDE, TOEFL, master's willingness, clinical years.
+5. Tone = calibrated expert honesty. Be direct, specific, and high-value. Never be vague or generic.
+6. DO NOT infer or assume data not in the questionnaire. Mark it "Inferred" or "Unassessed".
+7. "flipConditions" = specific conditions that would change the recommendation (e.g. "If visa secured independently → direct DDS becomes viable").
+8. Ranked pathways use integer ranks (1, 2, 3) and include "rankLabel" ("1st", "2nd", "3rd"), applicationPortal, and isPrimary.
+9. "mythWarnings" must be myths specifically relevant to this user's profile — not generic ones.
+10. applicationTimeline must be backwards-planned from the target cycle using "period" and "milestone" field names (not "window"/"title").
 
-PROFILE ANALYSIS (use this — I've already interpreted their strengths and gaps):
+PROFILE ANALYSIS (pre-interpreted — use these directives):
 {profile_summary}
 
-JSON SCHEMA — return ONLY this structure:
+JSON SCHEMA — return EXACTLY this structure:
 {{
   "responseSchemaVersion": "v2-premium",
   "profileSnapshot": {{
@@ -782,53 +1269,95 @@ JSON SCHEMA — return ONLY this structure:
     "degree": "string",
     "clinicalExperience": "string",
     "targetProgram": "string",
+    "programIntentBadge": "Needs guidance|Defined|Specialty",
+    "entryMode": "string (e.g. Pursue master's degree in U.S. first)",
     "preferredStates": ["string"],
     "visaStatus": "string",
     "mastersInterest": "string",
     "loanCosigner": "string",
-    "inbdeStatus": "string",
-    "toeflScore": "string",
-    "toeflLegacyEquivalent120": "string",
+    "inbdeStatus": "Passed|Not passed",
+    "toeflScore": "band N",
+    "toeflLegacyEquivalent120": "N/120",
     "targetCycle": "string"
   }},
   "readinessScore": {{
-    "overall": 0,
-    "status": "string",
+    "overall": 55,
+    "status": "string (one decisive verdict line)",
+    "dimensions": [
+      {{"name": "string", "score": 0, "status": "Strong|Good|Fair|Borderline|Gap|Unclear", "statusColor": "green|teal|amber|red|gray"}}
+    ],
     "strengths": ["string"],
     "gaps": ["string"]
   }},
   "pathwayRecommendation": {{
     "primaryPathway": "string",
-    "verdict": "string",
+    "bestPathwayForYou": "string (decisive one-liner advisor call)",
+    "verdict": "string (2-3 sentence strategic verdict)",
+    "decisionNote": "string (memorable conclusion line from an expert)",
+    "secondaryStrategy": "string",
+    "applicationPortal": "ADEA CAAPID|ADEA PASS|Institution-specific",
     "whyThisFits": ["string"],
-    "secondaryStrategy": "string"
+    "flipConditions": ["string (e.g. If visa secured → direct DDS viable)"],
+    "whyNotAlternatives": ["string"],
+    "rankedPathways": [
+      {{
+        "rank": 1,
+        "rankLabel": "1st",
+        "pathTitle": "string",
+        "fitSummary": "string",
+        "applicationPortal": "string",
+        "requirementsStillNeeded": ["string"],
+        "blockers": ["string"],
+        "realityCheck": "string",
+        "bestUseCase": "string",
+        "isPrimary": true
+      }}
+    ]
   }},
   "mainRisks": [
-    {{"issue": "string", "impact": "High|Medium|Low|Unassessed", "note": "string", "evidenceBasis": "string", "assessmentType": "Evidence-Based|Unassessed"}}
+    {{
+      "issue": "string",
+      "impact": "High|Medium|Low|Unassessed",
+      "impactColor": "red|amber|green|gray",
+      "note": "string (specific, evidence-based, not generic)",
+      "evidenceBasis": "string",
+      "assessmentType": "Evidence-Based|Inferred|Unassessed"
+    }}
   ],
-  "next90DaysPlan": ["string"],
-  "next12To18Months": ["string"],
-  "questionnaireGrounding": [
-    {{"questionId": "qX", "answer": "string", "pathwayInfluence": "string"}}
+  "next90DaysPlan": ["string (6 specific actions)"],
+  "next12To18Months": ["string (5 strategic milestones)"],
+  "dentnavServices": {{
+    "neededNow": [{{"service": "string", "reason": "string", "timing": ""}}],
+    "neededLater": [{{"service": "string", "reason": "string", "timing": "string (e.g. Early 2027)"}}]
+  }},
+  "applicationTimeline": [
+    {{"period": "string", "periodColor": "red|amber|purple|teal|green", "milestone": "string", "detail": "string"}}
   ],
-  "assessmentBoundaries": ["string"],
-  "statePlanningNote": "string",
-  "expertConclusion": "string"
+  "mythWarnings": [
+    {{"myth": "string", "fact": "string"}}
+  ],
+  "statePlanning": {{
+    "note": "string",
+    "states": [{{"name": "string", "notes": "string", "competitiveness": "Low|Moderate|Moderate-High|High"}}]
+  }},
+  "expertConclusion": "string (3-5 sentence expert summary, direct and memorable)"
 }}
 
-CONTENT QUALITY REQUIREMENTS:
-- "profileSnapshot" must echo the user's values accurately.
-- "readinessScore.overall" must be 35–95 and aligned to evidence.
-- "readinessScore.status" should be one decisive verdict line (for example: "Promising but not application-ready yet").
-- "whyThisFits", "strengths", and "gaps" should be concrete bullets, not generic phrases.
-- "mainRisks" must be evidence-bound to collected fields; if evidence is missing, use impact "Unassessed".
-- "next90DaysPlan" must have 6 clear actions.
-- "next12To18Months" must have 5 strategic milestones.
-- "questionnaireGrounding" must explicitly show how each collected answer shaped the pathway.
-- "assessmentBoundaries" must list what was not collected and therefore not inferred.
-- Mention that there is no universal path; fit depends on profile, finances, visa, and goals.
-- Mention state licensure is state-specific and must be verified with boards.
-- If target cycle is farther out (e.g., 2028), explicitly call this out as planning advantage.
+CONTENT QUALITY STANDARDS:
+- "profileSnapshot" — echo the user's exact collected values; add programIntentBadge and entryMode based on their answers.
+- "readinessScore.overall" — 35–95 range; calibrate against actual profile signals. Do not inflate.
+- "readinessScore.dimensions" — output ALL 6 dimensions: INBDE, TOEFL, Clinical experience, Visa & immigration, Financial readiness, Program clarity.
+- "rankedPathways" — exactly 3 items, ranked 1/2/3. Include relevant applicationPortal for each.
+- "flipConditions" — be specific: "If X changes → Y becomes the better path." Not generic.
+- "mainRisks" — 3 risks, each evidence-bound. Use "Inferred" only for soft signals. Use "Unassessed" for uncollected data.
+- "dentnavServices.neededNow" — 3 services needed immediately. "neededLater" — 3–4 services with realistic timing strings.
+- "applicationTimeline" — backwards-planned from target cycle; 5–6 milestones with period colors.
+- "mythWarnings" — exactly 3, tailored to this profile's specific misconceptions.
+- "statePlanning.states" — one card per preferred state with real board-level context and competitiveness signal.
+- "expertConclusion" — must feel like a memorable, personal sendoff from a senior advisor who has read the full profile.
+- Never use boilerplate phrases like "it is important to note" or "in conclusion".
+- Mention ADEA CAAPID or ADEA PASS where appropriate.
+- Reference DENTPIN as a first administrative step.
 
 {knowledge_base}"""
 
@@ -847,9 +1376,10 @@ ANALYSIS_JSON_SCHEMA: dict[str, Any] = {
             "mainRisks",
             "next90DaysPlan",
             "next12To18Months",
-            "questionnaireGrounding",
-            "assessmentBoundaries",
-            "statePlanningNote",
+            "dentnavServices",
+            "applicationTimeline",
+            "mythWarnings",
+            "statePlanning",
             "expertConclusion",
         ],
         "properties": {
@@ -858,24 +1388,18 @@ ANALYSIS_JSON_SCHEMA: dict[str, Any] = {
                 "type": "object",
                 "additionalProperties": False,
                 "required": [
-                    "country",
-                    "degree",
-                    "clinicalExperience",
-                    "targetProgram",
-                    "preferredStates",
-                    "visaStatus",
-                    "mastersInterest",
-                    "loanCosigner",
-                    "inbdeStatus",
-                    "toeflScore",
-                    "toeflLegacyEquivalent120",
-                    "targetCycle",
+                    "country", "degree", "clinicalExperience", "targetProgram",
+                    "programIntentBadge", "entryMode", "preferredStates",
+                    "visaStatus", "mastersInterest", "loanCosigner", "inbdeStatus",
+                    "toeflScore", "toeflLegacyEquivalent120", "targetCycle",
                 ],
                 "properties": {
                     "country": {"type": "string"},
                     "degree": {"type": "string"},
                     "clinicalExperience": {"type": "string"},
                     "targetProgram": {"type": "string"},
+                    "programIntentBadge": {"type": "string"},
+                    "entryMode": {"type": "string"},
                     "preferredStates": {"type": "array", "items": {"type": "string"}},
                     "visaStatus": {"type": "string"},
                     "mastersInterest": {"type": "string"},
@@ -889,10 +1413,24 @@ ANALYSIS_JSON_SCHEMA: dict[str, Any] = {
             "readinessScore": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["overall", "status", "strengths", "gaps"],
+                "required": ["overall", "status", "dimensions", "strengths", "gaps"],
                 "properties": {
                     "overall": {"type": "number"},
                     "status": {"type": "string"},
+                    "dimensions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["name", "score", "status", "statusColor"],
+                            "properties": {
+                                "name": {"type": "string"},
+                                "score": {"type": "number"},
+                                "status": {"type": "string"},
+                                "statusColor": {"type": "string"},
+                            },
+                        },
+                    },
                     "strengths": {"type": "array", "items": {"type": "string"}},
                     "gaps": {"type": "array", "items": {"type": "string"}},
                 },
@@ -900,12 +1438,45 @@ ANALYSIS_JSON_SCHEMA: dict[str, Any] = {
             "pathwayRecommendation": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["primaryPathway", "verdict", "whyThisFits", "secondaryStrategy"],
+                "required": [
+                    "primaryPathway", "bestPathwayForYou", "verdict", "decisionNote",
+                    "secondaryStrategy", "applicationPortal", "whyThisFits",
+                    "flipConditions", "whyNotAlternatives", "rankedPathways",
+                ],
                 "properties": {
                     "primaryPathway": {"type": "string"},
+                    "bestPathwayForYou": {"type": "string"},
                     "verdict": {"type": "string"},
-                    "whyThisFits": {"type": "array", "items": {"type": "string"}},
+                    "decisionNote": {"type": "string"},
                     "secondaryStrategy": {"type": "string"},
+                    "applicationPortal": {"type": "string"},
+                    "whyThisFits": {"type": "array", "items": {"type": "string"}},
+                    "flipConditions": {"type": "array", "items": {"type": "string"}},
+                    "whyNotAlternatives": {"type": "array", "items": {"type": "string"}},
+                    "rankedPathways": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": [
+                                "rank", "rankLabel", "pathTitle", "fitSummary",
+                                "applicationPortal", "requirementsStillNeeded",
+                                "blockers", "realityCheck", "bestUseCase", "isPrimary",
+                            ],
+                            "properties": {
+                                "rank": {"type": "number"},
+                                "rankLabel": {"type": "string"},
+                                "pathTitle": {"type": "string"},
+                                "fitSummary": {"type": "string"},
+                                "applicationPortal": {"type": "string"},
+                                "requirementsStillNeeded": {"type": "array", "items": {"type": "string"}},
+                                "blockers": {"type": "array", "items": {"type": "string"}},
+                                "realityCheck": {"type": "string"},
+                                "bestUseCase": {"type": "string"},
+                                "isPrimary": {"type": "boolean"},
+                            },
+                        },
+                    },
                 },
             },
             "mainRisks": {
@@ -913,10 +1484,11 @@ ANALYSIS_JSON_SCHEMA: dict[str, Any] = {
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["issue", "impact", "note", "evidenceBasis", "assessmentType"],
+                    "required": ["issue", "impact", "impactColor", "note", "evidenceBasis", "assessmentType"],
                     "properties": {
                         "issue": {"type": "string"},
                         "impact": {"type": "string"},
+                        "impactColor": {"type": "string"},
                         "note": {"type": "string"},
                         "evidenceBasis": {"type": "string"},
                         "assessmentType": {"type": "string"},
@@ -925,21 +1497,86 @@ ANALYSIS_JSON_SCHEMA: dict[str, Any] = {
             },
             "next90DaysPlan": {"type": "array", "items": {"type": "string"}},
             "next12To18Months": {"type": "array", "items": {"type": "string"}},
-            "questionnaireGrounding": {
+            "dentnavServices": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["neededNow", "neededLater"],
+                "properties": {
+                    "neededNow": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["service", "reason", "timing"],
+                            "properties": {
+                                "service": {"type": "string"},
+                                "reason": {"type": "string"},
+                                "timing": {"type": "string"},
+                            },
+                        },
+                    },
+                    "neededLater": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["service", "reason", "timing"],
+                            "properties": {
+                                "service": {"type": "string"},
+                                "reason": {"type": "string"},
+                                "timing": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            },
+            "applicationTimeline": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["questionId", "answer", "pathwayInfluence"],
+                    "required": ["period", "periodColor", "milestone", "detail"],
                     "properties": {
-                        "questionId": {"type": "string"},
-                        "answer": {"type": "string"},
-                        "pathwayInfluence": {"type": "string"},
+                        "period": {"type": "string"},
+                        "periodColor": {"type": "string"},
+                        "milestone": {"type": "string"},
+                        "detail": {"type": "string"},
                     },
                 },
             },
-            "assessmentBoundaries": {"type": "array", "items": {"type": "string"}},
-            "statePlanningNote": {"type": "string"},
+            "mythWarnings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["myth", "fact"],
+                    "properties": {
+                        "myth": {"type": "string"},
+                        "fact": {"type": "string"},
+                    },
+                },
+            },
+            "statePlanning": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["note", "states"],
+                "properties": {
+                    "note": {"type": "string"},
+                    "states": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["name", "notes", "competitiveness"],
+                            "properties": {
+                                "name": {"type": "string"},
+                                "notes": {"type": "string"},
+                                "competitiveness": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            },
             "expertConclusion": {"type": "string"},
         },
     },
