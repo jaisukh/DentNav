@@ -23,9 +23,16 @@ target_metadata = Base.metadata
 
 
 def get_sync_database_url() -> str:
+    # Alembic uses a sync driver (psycopg2). Normalize whatever scheme the
+    # platform provides (postgres://, postgresql://, postgresql+asyncpg://, ...)
+    # to a psycopg2-compatible URL.
     url = os.environ.get("DATABASE_URL", "")
-    if "+asyncpg" in url:
-        return url.replace("+asyncpg", "")
+    if not url:
+        return url
+    if url.startswith("postgresql+asyncpg://"):
+        return "postgresql://" + url[len("postgresql+asyncpg://") :]
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
     return url
 
 
