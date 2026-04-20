@@ -1,4 +1,4 @@
-const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 /** Frontend -> FastAPI backend endpoints. */
 export const API_ROUTES = {

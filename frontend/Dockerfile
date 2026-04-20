@@ -24,14 +24,13 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Non-root user
+# Non-root user — set ownership on COPY to avoid `chown -R` (slower; can hit BuildKit I/O errors on some hosts).
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
+COPY --chown=appuser:appgroup --from=builder /app/public ./public
+COPY --chown=appuser:appgroup --from=builder /app/.next/standalone ./
+COPY --chown=appuser:appgroup --from=builder /app/.next/static ./.next/static
 
-RUN chown -R appuser:appgroup /app
 USER appuser
 
 EXPOSE 3000
