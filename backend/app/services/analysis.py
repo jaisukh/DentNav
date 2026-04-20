@@ -488,7 +488,7 @@ def _visa_category(visa_raw: str) -> str:
         return "non-study"
     if v in {"green card", "citizen", "citizenship"}:
         return "permanent"
-    if v in {"f1", "f-1", "j1", "j-1", "h4", "h-4", "h1", "h-1", "h1b", "h-1b",
+    if v in {"f1", "f-1", "f2", "f-2", "j1", "j-1", "h4", "h-4", "h1", "h-1", "h1b", "h-1b",
              "l1", "l2", "l-1", "l-2", "asylum"}:
         return "active"
     return "active"
@@ -529,8 +529,12 @@ def _compute_readiness_dimensions(answers: AnswerMap) -> list[dict[str, Any]]:
         clin_score, clin = 20, ("Gap", "red")
 
     visa_cat = _visa_category(visa_raw)
+    visa_l = visa_raw.lower().strip()
+    is_f2 = bool(re.search(r"\bf[-\s]?2\b", visa_l))
     if visa_cat == "permanent":
         visa_score, visa = 95, ("Strong", "green")
+    elif is_f2:
+        visa_score, visa = 58, ("Active F-2: limited study; often requires F-1 transition", "amber")
     elif visa_cat == "active":
         visa_score, visa = 70, ("Active", "teal")
     elif visa_cat == "non-study":
@@ -1221,6 +1225,33 @@ def _rewrite_direct_licensure_absolutes(text: str) -> str:
     return out
 
 
+_DDS_F1_FALSE_BLOCKER_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(
+            r"(?i)\bdirect\s+DDS\s*/\s*DMD\s*:\s*not\s+viable\s+without\s+"
+            r"(?:a\s+|an\s+|the\s+|confirmed\s+)?F[-\s]?1(?:\s+status)?(?:\s+and\s+admission)?\.?"
+        ),
+        "Direct DDS/DMD: Requires admission-led F-1 transition when required by the school (F-1 is typically obtained after admission).",
+    ),
+    (
+        re.compile(
+            r"(?i)\bDDS\s*/\s*DMD\s+(?:is\s+)?not\s+viable\s+without\s+"
+            r"(?:a\s+|an\s+|the\s+|confirmed\s+)?F[-\s]?1(?:\s+status)?\b"
+        ),
+        "DDS/DMD is viable through admission-led F-1 transition when required by school policy.",
+    ),
+]
+
+
+def _rewrite_dds_f1_false_blockers(text: str) -> str:
+    if not text:
+        return text
+    out = text
+    for pat, replacement in _DDS_F1_FALSE_BLOCKER_PATTERNS:
+        out = pat.sub(replacement, out)
+    return out
+
+
 _TOEFL_OVERSALE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (
         re.compile(r"(?i)\bTOEFL[^.]{0,80}\b(excellent|exceptional|outstanding)\b"),
@@ -1242,17 +1273,292 @@ def _rewrite_toefl_oversell(text: str) -> str:
     return out
 
 
+_GENERIC_ACTIVE_VISA_REWRITE_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(
+        r"(?i)\b(?:plan|map|follow|begin|start|initiate|kick\s*off|secure)\s+"
+        r"(?:the\s+|a\s+|an\s+|your\s+)?F[-\s]?1\s+visa\s+sequence[^.]*"
+    ),
+    re.compile(
+        r"(?i)\badmission\s*(?:→|->|-->|–>|—>|\s+to\s+)\s*I[-\s]?20\s*"
+        r"(?:→|->|-->|–>|—>|\s+to\s+)\s*(?:SEVIS[^→\->.]*?(?:→|->|-->|–>|—>|\s+to\s+))?"
+        r"(?:DS[-\s]?160[^→\->.]*?(?:→|->|-->|–>|—>|\s+to\s+))?"
+        r"(?:F[-\s]?1|J[-\s]?1)(?:\s+visa)?(?:\s+interview)?"
+    ),
+    re.compile(
+        r"(?i)\bsecure\s+(?:admission\s+and\s+)?(?:an\s+|the\s+)?I[-\s]?20[^.]*?F[-\s]?1(?:\s+visa)?[^.]*"
+    ),
+]
+
+_FIXED_ACTIVE_VISA_REWRITES: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(
+            r"(?i)\b(?:apply|file|filing)\s+for\s+(?:an\s+|a\s+|the\s+|your\s+)?"
+            r"F[-\s]?1(?:\s+visa)?\b"
+        ),
+        "maintain current visa status",
+    ),
+    (
+        re.compile(
+            r"(?i)\b(?:begin|start)\s+(?:the\s+|your\s+)?F[-\s]?1(?:\s+visa)?\s+(?:application|process)?\b"
+        ),
+        "maintain current visa status",
+    ),
+    (
+        re.compile(
+            r"(?i)\b(?:pursue|secure|obtain|get)\s+(?:an?\s+|your\s+)?F[-\s]?1(?:\s+visa)?\b"
+            r"(?!\s+status)"
+        ),
+        "maintain current visa status",
+    ),
+    (
+        re.compile(r"(?i)\bvisa\s+pathway\s+for\s+(?:specialty|residency|IDP|DDS)\b"),
+        "visa alignment with program requirements",
+    ),
+    (
+        re.compile(r"(?i)\bvisa\s+pathway\s+limitation\b"),
+        "visa alignment with program requirements",
+    ),
+    (
+        re.compile(r"(?i)\bstudy\s*/\s*work\s+limitation\b"),
+        "status maintenance requirement",
+    ),
+]
+
+
+# I-20 is an F-1 (and M-1) document. For non-F-1 active visas, phrases like
+# "coordinate I-20 transfer for H-4" are factually wrong. For H-4 and L-2,
+# study does not require a new I-20 unless the program mandates transition
+# to F-1; for H-1B/L-1, full-time study typically requires change of status
+# to F-1 (new I-20). We rewrite the generic "I-20 transfer" phrasing into
+# visa-correct wording on a per-kind basis.
+_I20_WRONG_FOR_VISA_PATTERNS: list[re.Pattern[str]] = [
+    # Longest / most specific first so they consume the trailing "visa alignment" tail.
+    re.compile(
+        r"(?i)\bsecure\s+(?:admission\s+and\s+)?coordinate\s+I[-\s]?20\s+transfer\s+"
+        r"for\s+(?:an?\s+|the\s+|your\s+)?H[-\s]?[14](?:\s+visa)?(?:\s+alignment)?"
+    ),
+    re.compile(
+        r"(?i)\bsecure\s+(?:admission\s+and\s+)?coordinate\s+I[-\s]?20\s+transfer\s+"
+        r"for\s+(?:an?\s+|the\s+|your\s+)?L[-\s]?2(?:\s+visa)?(?:\s+alignment)?"
+    ),
+    re.compile(
+        r"(?i)\bcoordinate\s+I[-\s]?20\s+transfer\s+(?:to\s+the\s+admitting\s+program\s+)?"
+        r"(?:once\s+offers\s+land\s+)?for\s+(?:an?\s+|the\s+|your\s+)?H[-\s]?[14]"
+        r"(?:\s+visa)?(?:\s+alignment)?"
+    ),
+    re.compile(
+        r"(?i)\bcoordinate\s+I[-\s]?20\s+transfer\s+(?:to\s+the\s+admitting\s+program\s+)?"
+        r"(?:once\s+offers\s+land\s+)?for\s+(?:an?\s+|the\s+|your\s+)?L[-\s]?2"
+        r"(?:\s+visa)?(?:\s+alignment)?"
+    ),
+    re.compile(
+        r"(?i)\bI[-\s]?20\s+transfer\s+for\s+(?:an?\s+|the\s+|your\s+)?H[-\s]?[14]"
+        r"(?:\s+visa)?(?:\s+alignment)?"
+    ),
+    re.compile(
+        r"(?i)\bI[-\s]?20\s+transfer\s+for\s+(?:an?\s+|the\s+|your\s+)?L[-\s]?2"
+        r"(?:\s+visa)?(?:\s+alignment)?"
+    ),
+    re.compile(
+        r"(?i)\balign\s+(?:an?\s+|the\s+|your\s+)?H[-\s]?[14]\s+visa\s+with\s+"
+        r"(?:the\s+)?I[-\s]?20\s+transfer(?:\s+process)?"
+    ),
+    re.compile(
+        r"(?i)\balign\s+(?:an?\s+|the\s+|your\s+)?L[-\s]?2\s+visa\s+with\s+"
+        r"(?:the\s+)?I[-\s]?20\s+transfer(?:\s+process)?"
+    ),
+]
+
+
+_H4_ENROLLMENT_PHRASE = (
+    "ensure enrollment documentation aligns with your H-4 status; transition to "
+    "F-1 only if the admitting program specifically requires it"
+)
+_F2_ENROLLMENT_PHRASE = (
+    "F-2 allows limited study but often requires transition to F-1 for full "
+    "program participation — confirm policy with each admitting school"
+)
+_H1B_ENROLLMENT_PHRASE = (
+    "plan change of status from H-1B to F-1 via the admitting program's new I-20 "
+    "before full-time enrollment"
+)
+_L2_ENROLLMENT_PHRASE = (
+    "ensure enrollment documentation aligns with your L-2 status; transition to "
+    "F-1 only if the admitting program specifically requires it"
+)
+_L1_ENROLLMENT_PHRASE = (
+    "plan change of status from L-1 to F-1 via the admitting program's new I-20 "
+    "before full-time enrollment"
+)
+_OPT_ENROLLMENT_PHRASE = (
+    "plan academic re-entry on a fresh I-20 from the admitting program before "
+    "OPT expires"
+)
+_J1_ENROLLMENT_PHRASE = (
+    "coordinate DS-2019 transfer with your sponsor and the admitting program "
+    "(and plan for any 212(e) 2-year home residency requirement if applicable)"
+)
+_PERMANENT_ENROLLMENT_PHRASE = (
+    "no new visa document is required — permanent residency clears immigration "
+    "constraints entirely"
+)
+
+
+def _visa_specific_enrollment_rewrite(profile: dict[str, Any] | None) -> str | None:
+    kind = _visa_kind(profile)
+    return {
+        "F-2": _F2_ENROLLMENT_PHRASE,
+        "H-4": _H4_ENROLLMENT_PHRASE,
+        "L-2": _L2_ENROLLMENT_PHRASE,
+        "H-1B": _H1B_ENROLLMENT_PHRASE,
+        "L-1": _L1_ENROLLMENT_PHRASE,
+        "OPT": _OPT_ENROLLMENT_PHRASE,
+        "J-1": _J1_ENROLLMENT_PHRASE,
+        "permanent": _PERMANENT_ENROLLMENT_PHRASE,
+    }.get(kind)
+
+
+_DEPENDENT_I20_STANDALONE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)\bsecure\s+admission\s+and\s+coordinate\s+I[-\s]?20\s+transfer\b"),
+    re.compile(r"(?i)\bcoordinate\s+I[-\s]?20\s+transfer\b"),
+)
+
+
+def _rewrite_active_visa_phrasing(text: str, profile: dict[str, Any] | None) -> str:
+    if not text or not (_profile_visa_is_active(profile) or _profile_visa_is_permanent(profile)):
+        return text
+    out = text
+    maintenance = _active_visa_maintenance_phrase(profile)
+    kind = _visa_kind(profile)
+
+    # Generic acquisition-flow wording → visa-specific maintenance wording.
+    for pat in _GENERIC_ACTIVE_VISA_REWRITE_PATTERNS:
+        out = pat.sub(maintenance, out)
+
+    for pat, replacement in _FIXED_ACTIVE_VISA_REWRITES:
+        out = pat.sub(replacement, out)
+
+    # Visa-type correctness: I-20 language is wrong for non-F-1 holders.
+    specific = _visa_specific_enrollment_rewrite(profile)
+    if specific:
+        for pat in _I20_WRONG_FOR_VISA_PATTERNS:
+            out = pat.sub(specific, out)
+
+    # For dependents (H-4 / L-2), also rewrite standalone "coordinate I-20 transfer"
+    # (without "for H-4" suffix) — I-20 simply doesn't apply to them.
+    if kind in {"H-4", "L-2", "F-2"}:
+        dependent_phrase = (
+            "confirm F-2 study limits and transition to F-1 if full-program participation requires it"
+            if kind == "F-2"
+            else f"secure admission and confirm the program's enrollment policy for {kind} dependents"
+        )
+        for pat in _DEPENDENT_I20_STANDALONE_PATTERNS:
+            out = pat.sub(dependent_phrase, out)
+
+    if kind == "F-2":
+        out = re.sub(
+            r"(?i)\bmaintain current visa status\b",
+            "confirm F-2 study limits and transition to F-1 if full-program participation requires it",
+            out,
+        )
+
+    return out
+
+
+_INBDE_DONE_REPLACEMENT = "leverage INBDE completion for applications"
+
+_INBDE_DONE_REWRITES: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(
+            r"(?i)\bschedule\s+and\s+pass\s+(?:the\s+)?INBDE[^.]*"
+        ),
+        _INBDE_DONE_REPLACEMENT,
+    ),
+    (re.compile(r"(?i)\bschedule\s+(?:the\s+)?INBDE\b"), _INBDE_DONE_REPLACEMENT),
+    (re.compile(r"(?i)\bpass\s+(?:the\s+)?INBDE\s+(?:early|first|soon|this\s+cycle)?\b"), _INBDE_DONE_REPLACEMENT),
+    (re.compile(r"(?i)\btake\s+(?:the\s+)?INBDE\b"), _INBDE_DONE_REPLACEMENT),
+    (re.compile(r"(?i)\bprepare\s+for\s+(?:the\s+)?INBDE\b"), _INBDE_DONE_REPLACEMENT),
+    (re.compile(r"(?i)\bINBDE\s+(?:timing|preparation|readiness|not\s+passed|pending)\b"), "INBDE completed"),
+    (re.compile(r"(?i)\bINBDE\s+is\s+(?:the\s+)?#?1\s+(?:blocker|priority)\b"), "INBDE is already satisfied"),
+    (re.compile(r"(?i)\bclear(?:ing)?\s+(?:the\s+)?INBDE\b"), "leveraging INBDE completion"),
+    (re.compile(r"(?i)\bcomplete\s+INBDE\b"), "leverage INBDE completion"),
+    # Conditional / feasibility caveats that should never appear when INBDE is already passed.
+    (
+        re.compile(
+            r"(?i)[,;]?\s*apply\s+in\s+the\s+same\s+cycle\s+only\s+if\s+INBDE\s+is\s+cleared\s+early\s+"
+            r"and\s+documents\s*\([^)]*\)\s+are\s+fully\s+ready\s*;\s*otherwise\s+shift\s+to\s+the\s+next\s+viable\s+window\.?"
+        ),
+        "",
+    ),
+    (
+        re.compile(
+            r"(?i)\bonly\s+if\s+INBDE\s+is\s+cleared\s+early\b[^.]*"
+        ),
+        "",
+    ),
+    (re.compile(r"(?i)\bif\s+INBDE\s+is\s+cleared\s+early\b"), "with INBDE already cleared"),
+    (re.compile(r"(?i)\bonce\s+INBDE\s+(?:clears|is\s+cleared|passes|is\s+passed)\b"), "with INBDE already cleared"),
+    (re.compile(r"(?i)\bbefore\s+INBDE\s+(?:clears|passes)\b"), "before your CAAPID submission"),
+    (re.compile(r"(?i)\bINBDE\s+is\s+cleared\s+early\b"), "INBDE is already cleared"),
+    (re.compile(r"(?i)\bINBDE\s+clears?\s+early\b"), "INBDE is already cleared"),
+    (re.compile(r"(?i)\bpending\s+INBDE\b"), "INBDE already passed"),
+    (re.compile(r"(?i)\bINBDE\s+cleared\s+early\b"), "INBDE is already cleared"),
+]
+
+
+def _rewrite_inbde_done_phrasing(text: str, profile: dict[str, Any] | None) -> str:
+    if not text or not _profile_inbde_passed(profile):
+        return text
+    out = text
+    for pat, replacement in _INBDE_DONE_REWRITES:
+        out = pat.sub(replacement, out)
+    return out
+
+
+_POST_REWRITE_CLEANUP_PATTERNS: tuple[tuple[re.Pattern[str], Any], ...] = (
+    (re.compile(r"\s{2,}"), " "),
+    (re.compile(r"\s+([,.;:])"), r"\1"),
+    # Remove dangling " visa alignment" suffix when a prior rewrite consumed its head.
+    (re.compile(r"(?i)(?:status\s+maintenance\s+requirement|it\s+only\s+if[^.]*?)\s+visa\s+alignment\b"),
+     lambda m: m.group(0).replace(" visa alignment", "")),
+)
+
+
+def _clean_rewritten_text(text: str) -> str:
+    out = text
+    for pat, repl in _POST_REWRITE_CLEANUP_PATTERNS:
+        if callable(repl):
+            out = pat.sub(repl, out)
+        else:
+            out = pat.sub(repl, out)
+    out = out.strip()
+    # Sentence-initial capitalization: if it looks like a full sentence
+    # (ends with punctuation or is reasonably long) and starts with lowercase,
+    # uppercase the first letter.
+    if out and out[0].islower() and (out.endswith((".", "!", "?")) or len(out.split()) > 3):
+        out = out[0].upper() + out[1:]
+    return out
+
+
 def _apply_reasoning_guards_to_text(text: Any, profile: dict[str, Any]) -> Any:
     if not isinstance(text, str) or not text.strip():
         return text
     out = text
     out = _rewrite_overconfident_readiness_phrasing(out, profile)
-    out = _rewrite_visa_application_phrasing(out)
+    # Active-visa / INBDE-done rewrites must run BEFORE the generic visa-application
+    # rewrite, which otherwise expands "apply for F-1" into the admission→I-20→F-1
+    # template that we do NOT want for candidates already holding study/work status.
+    out = _rewrite_active_visa_phrasing(out, profile)
+    out = _rewrite_inbde_done_phrasing(out, profile)
+    if not _profile_visa_is_active(profile):
+        out = _rewrite_visa_application_phrasing(out)
     out = _rewrite_complete_masters_phrasing(out)
     out = _rewrite_broad_portability_claims(out)
     out = _rewrite_absolute_state_idp_claims(out)
     out = _rewrite_direct_licensure_absolutes(out)
+    out = _rewrite_dds_f1_false_blockers(out)
     out = _rewrite_toefl_oversell(out)
+    out = _clean_rewritten_text(out)
     return out
 
 
@@ -1266,21 +1572,255 @@ def _apply_reasoning_guards_tree(obj: Any, profile: dict[str, Any]) -> Any:
     return obj
 
 
+def _profile_visa_is_blocker(profile: dict[str, Any] | None) -> bool:
+    """True when visa is definitely a study/work blocker (none, B1/B2, tourist, unknown)."""
+    if not profile:
+        return True
+    v = str(profile.get("visaStatus", "")).strip().lower()
+    if not v or v in {"none", "not specified", "unknown"}:
+        return True
+    if "b1" in v or "b2" in v or "tourist" in v or "visitor" in v:
+        return True
+    return False
+
+
 def _profile_has_dual_critical_blockers(profile: dict[str, Any]) -> bool:
-    """Critical blockers = INBDE not passed + visa status not study/work viable."""
-    inbde = str(profile.get("inbdeStatus", "")).strip().lower()
-    visa = str(profile.get("visaStatus", "")).strip().lower()
-    inbde_blocked = any(
-        token in inbde for token in ("not", "no", "pending", "fail", "not passed", "not pass")
-    )
-    visa_blocked = (
-        visa in {"", "none", "not specified", "unknown"}
-        or "b1" in visa
-        or "b2" in visa
-        or "visitor" in visa
-        or "tourist" in visa
-    )
-    return bool(inbde_blocked and visa_blocked)
+    """Critical blockers = INBDE not passed + visa status is a study/work blocker."""
+    return (not _profile_inbde_passed(profile)) and _profile_visa_is_blocker(profile)
+
+
+_ACTIVE_VISA_TOKENS = (
+    "f-1", "f1", "j-1", "j1", "h-1b", "h1b", "h1-b", "h-4", "h4",
+    "l-1", "l1", "l-2", "l2", "opt", "stem opt",
+)
+_PERMANENT_VISA_TOKENS = ("green", "perm", "citizen", "lpr", "resident")
+
+
+def _visa_kind(profile: dict[str, Any] | None) -> str:
+    """Classify the candidate's visa into a small, stable set of kinds.
+
+    Returns one of: ``F-1``, ``F-2``, ``J-1``, ``H-1B``, ``H-4``, ``L-1``,
+    ``L-2``, ``OPT``, ``B1/B2``, ``permanent``, ``none``, ``unknown``.
+    """
+    if not profile:
+        return "unknown"
+    v = str(profile.get("visaStatus", "")).strip().lower()
+    if not v or v in {"not specified", "unknown"}:
+        return "unknown"
+    if v == "none":
+        return "none"
+    if any(tok in v for tok in _PERMANENT_VISA_TOKENS):
+        return "permanent"
+    if "b1" in v or "b2" in v or "tourist" in v or "visitor" in v:
+        return "B1/B2"
+    if "stem" in v and "opt" in v:
+        return "OPT"
+    if v.strip() == "opt" or " opt" in v or "opt " in v or v.endswith("opt"):
+        return "OPT"
+    if "f-1" in v or v == "f1" or v.startswith("f1 ") or v.endswith(" f1") or "f1-" in v:
+        return "F-1"
+    if "f-2" in v or v == "f2" or v.startswith("f2 ") or v.endswith(" f2") or "f2-" in v:
+        return "F-2"
+    if "j-1" in v or v == "j1" or v.startswith("j1 ") or v.endswith(" j1"):
+        return "J-1"
+    if "h-1b" in v or "h1b" in v or "h1-b" in v:
+        return "H-1B"
+    if "h-4" in v or v == "h4" or v.startswith("h4 ") or v.endswith(" h4"):
+        return "H-4"
+    if "l-1" in v or v == "l1":
+        return "L-1"
+    if "l-2" in v or v == "l2":
+        return "L-2"
+    return "unknown"
+
+
+def _profile_visa_is_active(profile: dict[str, Any] | None) -> bool:
+    return _visa_kind(profile) in {"F-1", "F-2", "J-1", "H-1B", "H-4", "L-1", "L-2", "OPT"}
+
+
+def _profile_visa_is_permanent(profile: dict[str, Any] | None) -> bool:
+    return _visa_kind(profile) == "permanent"
+
+
+# Visa-type-specific copy. These drive (a) phrase substitutions in LLM text
+# and (b) authoritative DO/DO NOT directives injected into the profile summary.
+_VISA_KIND_COPY: dict[str, dict[str, str]] = {
+    "F-1": {
+        "label": "F-1 (active study visa)",
+        "maintenance_phrase": (
+            "maintain F-1 status and coordinate I-20 transfer to the admitting "
+            "program once offers land"
+        ),
+        "enrollment_doc": "I-20",
+        "nuance": (
+            "F-1 permits full-time study and on-campus employment; CPT/OPT unlock "
+            "limited off-campus work. I-20 transfer happens after acceptance; SEVIS "
+            "record must move cleanly between programs."
+        ),
+    },
+    "F-2": {
+        "label": "F-2 (dependent of F-1)",
+        "maintenance_phrase": (
+            "confirm F-2 study limits with the admitting school and transition to "
+            "F-1 if full-program participation requires it"
+        ),
+        "enrollment_doc": (
+            "dependent F-2 documentation ties to the principal's F-1; a separate "
+            "student I-20 is required after transition to F-1"
+        ),
+        "nuance": (
+            "F-2 is a dependent status with no work authorization and constrained "
+            "study flexibility compared with F-1. Many full-time/professional "
+            "program tracks require conversion to F-1 before enrollment progression."
+        ),
+    },
+    "J-1": {
+        "label": "J-1 (exchange visitor)",
+        "maintenance_phrase": (
+            "maintain J-1 status and coordinate DS-2019 transfer with your sponsor "
+            "and the admitting program"
+        ),
+        "enrollment_doc": "DS-2019",
+        "nuance": (
+            "J-1 uses DS-2019 (not I-20). Some J-1 programs carry a 212(e) two-year "
+            "home-country residency requirement — confirm whether a waiver is needed "
+            "before planning H-1B or green card steps later. Specialty programs "
+            "often favor J-1 for residency sponsorship."
+        ),
+    },
+    "H-1B": {
+        "label": "H-1B (employer-sponsored work visa)",
+        "maintenance_phrase": (
+            "plan any academic program against H-1B compatibility — full-time "
+            "enrollment typically requires a change of status to F-1 via the "
+            "admitting program's I-20"
+        ),
+        "enrollment_doc": "I-20 (after change of status from H-1B)",
+        "nuance": (
+            "H-1B is work-only; full-time DDS/DMD typically requires change of "
+            "status to F-1 (new I-20 from the admitting program). Part-time or "
+            "non-degree study can often continue on H-1B — confirm with the "
+            "school DSO and the employer."
+        ),
+    },
+    "H-4": {
+        "label": "H-4 (dependent of H-1B)",
+        "maintenance_phrase": (
+            "confirm the admitting program's enrollment policy for H-4 dependents "
+            "— most programs permit full-time study on H-4 without a new I-20, "
+            "but some require transition to F-1 (new I-20 and change of status)"
+        ),
+        "enrollment_doc": (
+            "no new I-20 is required for H-4 study; some programs still mandate "
+            "transition to F-1 (and its own I-20) — confirm per program"
+        ),
+        "nuance": (
+            "H-4 permits full-time study (no separate I-20 needed unless a program "
+            "specifically requires F-1). Work requires an H-4 EAD, which is only "
+            "available when the H-1B principal is past certain green-card stages. "
+            "Duration is tied to the H-1B principal's status."
+        ),
+    },
+    "L-1": {
+        "label": "L-1 (intracompany transferee)",
+        "maintenance_phrase": (
+            "plan any full-time academic program against L-1 compatibility — "
+            "typically a change of status to F-1 is cleaner for a DDS/DMD program"
+        ),
+        "enrollment_doc": "I-20 (after change of status from L-1)",
+        "nuance": (
+            "L-1 is work-only. Full-time study generally requires change of status "
+            "to F-1 via the admitting program's I-20."
+        ),
+    },
+    "L-2": {
+        "label": "L-2 (dependent of L-1)",
+        "maintenance_phrase": (
+            "confirm the admitting program's enrollment policy for L-2 dependents "
+            "— most programs permit full-time study on L-2, but some require "
+            "transition to F-1 (new I-20 and change of status)"
+        ),
+        "enrollment_doc": (
+            "no new I-20 is required for L-2 study; some programs still mandate "
+            "transition to F-1 — confirm per program"
+        ),
+        "nuance": (
+            "L-2 permits full-time study and holds work authorization (EAD-eligible "
+            "for L-2 spouses). Duration is tied to the L-1 principal."
+        ),
+    },
+    "OPT": {
+        "label": "OPT / STEM-OPT (F-1 post-graduation work)",
+        "maintenance_phrase": (
+            "plan academic re-entry before OPT expires — transition back to F-1 "
+            "via the admitting program's I-20 before the OPT window closes"
+        ),
+        "enrollment_doc": "I-20 (from the admitting program)",
+        "nuance": (
+            "OPT is time-limited F-1 post-grad work. Re-entering full-time study "
+            "requires a new I-20 from the admitting school before OPT expires."
+        ),
+    },
+    "permanent": {
+        "label": "Permanent (green card / U.S. citizen)",
+        "maintenance_phrase": (
+            "no additional status action required — permanent residency / "
+            "citizenship clears all immigration constraints"
+        ),
+        "enrollment_doc": "not applicable",
+        "nuance": (
+            "Green card / citizenship removes visa barriers entirely and typically "
+            "makes the candidate FAFSA-eligible."
+        ),
+    },
+    "B1/B2": {
+        "label": "B1/B2 (visitor — blocker)",
+        "maintenance_phrase": (
+            "change status to F-1 via admission → I-20 → SEVIS → DS-160 → F-1 "
+            "interview; B1/B2 cannot be used for study"
+        ),
+        "enrollment_doc": "I-20 (after change of status to F-1)",
+        "nuance": (
+            "B1/B2 is a hard blocker for study/work. Must change status to F-1 "
+            "(or be admitted from abroad and arrive on F-1)."
+        ),
+    },
+    "none": {
+        "label": "No active visa",
+        "maintenance_phrase": (
+            "plan visa sequence: admission → I-20 (or DS-2019 for J-1) → SEVIS → "
+            "DS-160 → F-1/J-1 visa interview"
+        ),
+        "enrollment_doc": "I-20 (F-1) or DS-2019 (J-1)",
+        "nuance": "No current status; acquisition flow applies.",
+    },
+    "unknown": {
+        "label": "Unknown visa status",
+        "maintenance_phrase": (
+            "confirm current status with the school DSO and plan the appropriate "
+            "I-20 / DS-2019 / change-of-status step before CAAPID/PASS submission"
+        ),
+        "enrollment_doc": "depends on visa kind",
+        "nuance": "Visa kind unclear — verify before planning.",
+    },
+}
+
+
+def _active_visa_maintenance_phrase(profile: dict[str, Any] | None) -> str:
+    kind = _visa_kind(profile)
+    copy = _VISA_KIND_COPY.get(kind, _VISA_KIND_COPY["unknown"])
+    return copy["maintenance_phrase"]
+
+
+def _profile_inbde_passed(profile: dict[str, Any] | None) -> bool:
+    if not profile:
+        return False
+    i = str(profile.get("inbdeStatus", "")).strip().lower()
+    if not i:
+        return False
+    if "not" in i or "pending" in i or "fail" in i:
+        return False
+    return any(tok in i for tok in ("yes", "pass", "passed", "done", "complete"))
 
 
 def _cap_readiness_overall_for_critical_blockers(score: int, profile: dict[str, Any]) -> int:
@@ -1291,20 +1831,71 @@ def _cap_readiness_overall_for_critical_blockers(score: int, profile: dict[str, 
 
 
 def _ensure_biggest_lever_note(pathway: dict[str, Any], profile: dict[str, Any]) -> None:
-    if not _profile_has_dual_critical_blockers(profile):
-        return
     note = str(pathway.get("decisionNote", "")).strip()
     if "biggest lever" in note.lower():
         return
-    lever = (
-        "Biggest lever: pass INBDE and secure an admission-led F-1 pathway "
-        "(admission → I-20 → visa); this unlocks everything else."
-    )
+
+    inbde_done = _profile_inbde_passed(profile)
+    visa_active = _profile_visa_is_active(profile) or _profile_visa_is_permanent(profile)
+
+    if not _profile_has_dual_critical_blockers(profile) and (inbde_done and visa_active):
+        kind = _visa_kind(profile)
+        if kind in {"H-4", "L-2"}:
+            transition = (
+                f"secure CAAPID admission and confirm the program's enrollment policy for {kind} "
+                "dependents (transition to F-1 only if the program specifically requires it)"
+            )
+        elif kind in {"H-1B", "L-1"}:
+            transition = (
+                "secure CAAPID admission and execute change of status from your current work "
+                f"visa ({kind}) to F-1 via the admitting program's new I-20"
+            )
+        elif kind == "J-1":
+            transition = (
+                "secure CAAPID admission and coordinate DS-2019 transfer with your J-1 sponsor "
+                "(and plan for 212(e) waiver if applicable)"
+            )
+        elif kind == "OPT":
+            transition = (
+                "secure CAAPID admission and re-enter F-1 via a fresh I-20 before OPT expires"
+            )
+        elif kind == "permanent":
+            transition = (
+                "secure CAAPID admission (no visa sequencing required thanks to permanent residency)"
+            )
+        else:
+            transition = "secure CAAPID admission with a clean I-20 transfer to the admitting program"
+        lever = (
+            f"Biggest lever: verify program-specific FTD eligibility and {transition} — that "
+            "converts a strong academic profile into execution readiness."
+        )
+    elif inbde_done and not visa_active:
+        lever = (
+            "Biggest lever: secure admission-led F-1 pathway (admission → I-20 → visa). "
+            "INBDE is already cleared; visa sequencing is what unlocks everything else."
+        )
+    elif not inbde_done and visa_active:
+        lever = (
+            "Biggest lever: pass INBDE. Visa is already positioned; INBDE clearance is "
+            "what unlocks CAAPID/PASS application readiness."
+        )
+    else:
+        lever = (
+            "Biggest lever: pass INBDE and secure an admission-led F-1 pathway "
+            "(admission → I-20 → visa); this unlocks everything else."
+        )
     pathway["decisionNote"] = f"{note} {lever}".strip() if note else lever
 
 
-def _enforce_timeline_coverage(timeline: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Ensure key pathway checkpoints appear somewhere across 5-6 timeline rows."""
+def _enforce_timeline_coverage(
+    timeline: list[dict[str, str]],
+    profile: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    """Ensure key pathway checkpoints appear somewhere across 5-6 timeline rows.
+
+    Respects already-completed signals on the profile — we never inject a step the
+    candidate has already done (INBDE pass, F-1 acquisition, etc.).
+    """
     if not timeline:
         return timeline
     out = [dict(item) for item in timeline]
@@ -1312,19 +1903,34 @@ def _enforce_timeline_coverage(timeline: list[dict[str, str]]) -> list[dict[str,
         f"{str(i.get('milestone', ''))} {str(i.get('detail', ''))}".lower() for i in out
     )
 
+    inbde_done = _profile_inbde_passed(profile) if profile else False
+    visa_active = _profile_visa_is_active(profile) if profile else False
+
+    visa_phrase = (
+        "Maintain current study/work visa status and coordinate I-20 (or DS-2019 / H-1B) "
+        "transfer to the admitting program once offers land."
+        if visa_active
+        else "Map visa sequence explicitly: admission → I-20 → SEVIS fee → DS-160 → visa interview."
+    )
+
     checkpoints: list[tuple[tuple[str, ...], int, str]] = [
         (("dentpin",), 0, "Create DENTPIN before any ADEA portal work."),
         (
-            ("admission", "i-20", "sevis", "ds-160", "visa"),
+            ("admission", "i-20", "sevis", "ds-160", "visa", "status", "maintain"),
             0,
-            "Map visa sequence explicitly: admission → I-20 → SEVIS fee → DS-160 → visa interview.",
+            visa_phrase,
         ),
         (("ece", "wes", "credential"), min(1, len(out) - 1), "Complete ECE/WES credential evaluation."),
-        (
+    ]
+
+    if not inbde_done:
+        checkpoints.append((
             ("inbde",),
             min(2, len(out) - 1),
             "Schedule and pass INBDE early enough to avoid compressing application execution.",
-        ),
+        ))
+
+    checkpoints.extend([
         (
             ("sop", "lor", "cv"),
             min(2, len(out) - 1),
@@ -1341,7 +1947,7 @@ def _enforce_timeline_coverage(timeline: list[dict[str, str]]) -> list[dict[str,
             len(out) - 1,
             "Track offers, complete onboarding, and prepare relocation/matriculation.",
         ),
-    ]
+    ])
 
     for tokens, idx, phrase in checkpoints:
         if any(t in blob for t in tokens):
@@ -1353,11 +1959,16 @@ def _enforce_timeline_coverage(timeline: list[dict[str, str]]) -> list[dict[str,
 
 
 def _enforce_timeline_feasibility(profile: dict[str, Any], timeline: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Avoid unrealistically tight INBDE→apply sequencing when INBDE is not yet passed."""
+    """Avoid unrealistically tight INBDE→apply sequencing when INBDE is not yet passed.
+
+    Must use the shared `_profile_inbde_passed` helper: a raw `"yes"` string does
+    NOT contain "pass" / "passed" / "done" as a substring, so naive substring
+    checks incorrectly treated passed candidates as not-passed and injected the
+    `"only if INBDE is cleared early"` caveat anyway.
+    """
     if not timeline:
         return timeline
-    inbde = str(profile.get("inbdeStatus", "")).strip().lower()
-    if any(t in inbde for t in ("pass", "passed", "done", "complete")):
+    if _profile_inbde_passed(profile):
         return timeline
 
     out = [dict(item) for item in timeline]
@@ -1736,6 +2347,572 @@ def _build_profile_snapshot(parsed: dict[str, Any], answers: AnswerMap) -> dict[
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Completed-signal enforcement (HARD RULES 42–46 post-processor)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+_INBDE_PENDING_PHRASES = (
+    "pass inbde", "passing inbde", "schedule inbde", "scheduling inbde",
+    "take inbde", "taking inbde", "prepare for inbde", "preparing for inbde",
+    "inbde timing", "inbde preparation", "inbde readiness", "inbde not passed",
+    "clear inbde", "clearing inbde", "complete inbde",
+)
+
+_F1_ACQUISITION_PHRASES = (
+    "apply for f-1", "apply for f1", "apply for an f-1", "apply for an f1",
+    "file for f-1", "file for f1", "begin f-1", "begin f1", "start f-1",
+    "start f1", "secure an i-20", "secure i-20", "obtain an i-20",
+    "obtain i-20", "plan the f-1 visa sequence", "plan f-1 visa sequence",
+    "plan f1 visa sequence", "f-1 visa sequence", "f1 visa sequence",
+    "initiate f-1", "initiate f1", "pursue f-1", "pursue f1",
+    "visa sequence: admission", "admission → i-20", "admission -> i-20",
+    "admission to i-20",
+)
+
+_VAGUE_BLOCKER_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(p, re.IGNORECASE) for p in (
+        r"^\s*none\b",
+        r"^\s*no\s+(significant|major|hard|real)\s+blockers?\b",
+        r"^\s*no\s+blockers?\b",
+        r"^\s*nothing\s+significant\b",
+        r"^\s*n/?a\b",
+        r"^\s*not\s+applicable\b",
+    )
+)
+
+
+def _blocker_is_vague(value: str) -> bool:
+    v = (value or "").strip()
+    if not v:
+        return True
+    return any(p.search(v) for p in _VAGUE_BLOCKER_PATTERNS)
+
+
+def _item_is_about_done_step(
+    text: str,
+    inbde_done: bool,
+    visa_active: bool,
+) -> bool:
+    """True if the given free-form action text is primarily about acquiring a
+    capability the candidate already has (and therefore should be dropped)."""
+    t = text.lower()
+    if inbde_done and any(p in t for p in _INBDE_PENDING_PHRASES):
+        return True
+    if visa_active and any(p in t for p in _F1_ACQUISITION_PHRASES):
+        return True
+    return False
+
+
+def _drop_done_action_items(items: list[str], profile: dict[str, Any]) -> list[str]:
+    inbde_done = _profile_inbde_passed(profile)
+    visa_active = _profile_visa_is_active(profile) or _profile_visa_is_permanent(profile)
+    if not inbde_done and not visa_active:
+        return items
+    return [it for it in items if not _item_is_about_done_step(str(it), inbde_done, visa_active)]
+
+
+def _drop_done_timeline_rows(
+    timeline: list[dict[str, str]], profile: dict[str, Any]
+) -> list[dict[str, str]]:
+    inbde_done = _profile_inbde_passed(profile)
+    visa_active = _profile_visa_is_active(profile) or _profile_visa_is_permanent(profile)
+    if not inbde_done and not visa_active:
+        return timeline
+    out: list[dict[str, str]] = []
+    for row in timeline:
+        milestone = str(row.get("milestone", ""))
+        detail = str(row.get("detail", ""))
+        combined = f"{milestone} {detail}"
+        if _item_is_about_done_step(combined, inbde_done, visa_active):
+            # If the milestone is purely about a completed step, drop the row
+            # entirely. If the detail has other forward-looking content, keep
+            # the row but let text rewrites handle the residual phrasing.
+            if _item_is_about_done_step(milestone, inbde_done, visa_active):
+                continue
+        out.append(row)
+    return out
+
+
+def _clean_ranked_pathway_blockers(
+    ranked: list[dict[str, Any]], profile: dict[str, Any]
+) -> list[dict[str, Any]]:
+    target_lower = str(profile.get("targetProgram", "")).lower()
+    specialty_target = "specialty" in target_lower
+    visa_active = _profile_visa_is_active(profile)
+    visa_permanent = _profile_visa_is_permanent(profile)
+    kind = _visa_kind(profile)
+
+    def _admission_blocker_phrase() -> str:
+        if kind == "F-1":
+            return "CAAPID admission and I-20 transfer to the admitting program not yet secured"
+        if kind == "F-2":
+            return "CAAPID admission and school-specific F-2 vs F-1 enrollment requirement not yet confirmed"
+        if kind == "J-1":
+            return "CAAPID admission and DS-2019 transfer with your J-1 sponsor not yet secured"
+        if kind in {"H-4", "L-2"}:
+            return f"CAAPID admission and per-program enrollment policy for {kind} dependents not yet confirmed"
+        if kind == "H-1B":
+            return "CAAPID admission and change-of-status plan from H-1B to F-1 not yet executed"
+        if kind == "L-1":
+            return "CAAPID admission and change-of-status plan from L-1 to F-1 not yet executed"
+        if kind == "OPT":
+            return "CAAPID admission and fresh F-1 I-20 before OPT expires not yet secured"
+        if kind == "permanent":
+            return "CAAPID admission not yet secured (program shortlist, SOP, LORs)"
+        return "CAAPID admission and admission-led visa sequence not yet secured"
+
+    def _visa_blocker_phrase() -> str | None:
+        if visa_permanent:
+            return None
+        if kind in {"H-4", "L-2"}:
+            return f"Per-program enrollment policy for {kind} dependents not yet confirmed (some programs require F-1 transition)"
+        if kind == "H-1B":
+            return "Change of status from H-1B to F-1 not yet executed"
+        if kind == "L-1":
+            return "Change of status from L-1 to F-1 not yet executed"
+        if kind == "OPT":
+            return "OPT-window timing vs. academic start date not yet aligned (new I-20 required before expiry)"
+        if kind in {"F-1", "J-1"}:
+            return None  # active study visa — no hard blocker beyond normal transfer mechanics
+        return "Active study/work visa status not yet secured"
+
+    def _default_blockers_for(path_title: str) -> list[str]:
+        title_l = path_title.lower()
+        blockers: list[str] = []
+        if "specialty" in title_l:
+            blockers.append(
+                "Specialty program-specific FTD eligibility not yet verified (program-by-program)"
+            )
+            blockers.append("Competitive specialty credentials (CBSE / research / publications) not yet documented")
+        elif "master" in title_l:
+            blockers.append("U.S. master's is a bridge, not a licensure path — does not by itself qualify for state licensure")
+            blockers.append("Program fit with dental career goals still to be confirmed")
+        else:  # DDS/DMD IDP and generic
+            blockers.append(_admission_blocker_phrase())
+            blockers.append("ECE/WES assembly, SOP/LOR, and school shortlist not yet finalized")
+            if specialty_target:
+                blockers.append("Specialty preference requires separate program-by-program eligibility check post-DDS/DMD")
+        if not visa_active:
+            extra = _visa_blocker_phrase()
+            if extra:
+                blockers.append(extra)
+        return blockers[:2] if blockers else ["Conditional on program-by-program CAAPID/PASS verification"]
+
+    cleaned: list[dict[str, Any]] = []
+    for item in ranked:
+        raw_blockers = item.get("blockers")
+        values = raw_blockers if isinstance(raw_blockers, list) else []
+        filtered = [
+            str(v).strip()
+            for v in values
+            if str(v).strip() and not _blocker_is_vague(str(v))
+        ]
+        if not filtered:
+            filtered = _default_blockers_for(str(item.get("pathTitle", "")))
+        item = dict(item)
+        item["blockers"] = filtered
+        cleaned.append(item)
+    return cleaned
+
+
+def _rewrite_visa_risk_for_active_visa(
+    risks: list[dict[str, Any]], profile: dict[str, Any]
+) -> list[dict[str, Any]]:
+    is_active = _profile_visa_is_active(profile)
+    is_permanent = _profile_visa_is_permanent(profile)
+    if not (is_active or is_permanent):
+        return risks
+    out: list[dict[str, Any]] = []
+    for risk in risks:
+        issue = str(risk.get("issue", ""))
+        issue_l = issue.lower()
+        is_visa_risk = any(k in issue_l for k in ("visa", "immigration", "f-1", "f1", "h-4", "h4", "j-1", "j1", "h-1b", "h1b", "l-2", "l2", "opt"))
+        if not is_visa_risk:
+            out.append(risk)
+            continue
+        if is_permanent:
+            # Permanent residents / citizens have no visa risk by definition. Drop.
+            continue
+        new = dict(risk)
+        # Rewrite headline to alignment/maintenance framing.
+        new["issue"] = "Visa alignment with program requirements"
+        impact_raw = str(new.get("impact") or "").strip().lower()
+        bad_impact_markers = (
+            "high", "critical", "study/work limitation", "blocker", "blocked",
+            "status maintenance requirement", "maintenance requirement", "limitation",
+        )
+        if impact_raw in {"high", "critical", "blocker", "blocked"} or any(m in impact_raw for m in bad_impact_markers):
+            new["impact"] = "Alignment required"
+        if (new.get("impactColor") or "").lower() == "red":
+            new["impactColor"] = "amber"
+        note = str(new.get("note", ""))
+        if note:
+            new["note"] = _rewrite_active_visa_phrasing(note, profile)
+        out.append(new)
+    return out
+
+
+def _drop_inbde_gap_when_done(
+    readiness: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    if not _profile_inbde_passed(profile):
+        return readiness
+    if not isinstance(readiness, dict):
+        return readiness
+    out = dict(readiness)
+    gaps = out.get("gaps")
+    if isinstance(gaps, list):
+        out["gaps"] = [
+            g for g in gaps
+            if not any(p in str(g).lower() for p in _INBDE_PENDING_PHRASES)
+            and "inbde" not in str(g).lower()
+        ]
+    return out
+
+
+def _drop_inbde_risk_when_done(
+    risks: list[dict[str, Any]], profile: dict[str, Any]
+) -> list[dict[str, Any]]:
+    if not _profile_inbde_passed(profile):
+        return risks
+    out: list[dict[str, Any]] = []
+    for risk in risks:
+        issue_l = str(risk.get("issue", "")).lower()
+        note_l = str(risk.get("note", "")).lower()
+        if "inbde" in issue_l and any(p in issue_l + " " + note_l for p in _INBDE_PENDING_PHRASES + ("not passed", "pending")):
+            continue
+        out.append(risk)
+    return out
+
+
+_INBDE_CONDITIONAL_CAVEAT_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"(?i)[,;\s]*Apply\s+in\s+the\s+same\s+cycle\s+only\s+if\s+INBDE\s+is\s+cleared\s+early\s+"
+        r"and\s+documents\s*\([^)]*\)\s+are\s+fully\s+ready\s*;\s*otherwise\s+shift\s+to\s+the\s+next\s+viable\s+window\.?\s*"
+    ),
+    re.compile(r"(?i)\s*only\s+if\s+INBDE\s+is\s+cleared\s+early\b[^.]*\.?"),
+    re.compile(r"(?i)\bbefore\s+INBDE\s+(?:clears|passes)\b"),
+)
+
+
+def _strip_inbde_conditional_caveats_when_done(
+    response: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """Strip any residual 'only if INBDE is cleared early' style caveats when INBDE passed."""
+    if not _profile_inbde_passed(profile):
+        return response
+
+    def _scrub(text: str) -> str:
+        out = text
+        for pat in _INBDE_CONDITIONAL_CAVEAT_PATTERNS:
+            out = pat.sub(" ", out)
+        return re.sub(r"\s{2,}", " ", out).strip()
+
+    timeline = response.get("applicationTimeline")
+    if isinstance(timeline, list):
+        for row in timeline:
+            if isinstance(row, dict):
+                detail = row.get("detail")
+                if isinstance(detail, str):
+                    row["detail"] = _scrub(detail)
+
+    for key in ("next90DaysPlan", "next12To18Months"):
+        items = response.get(key)
+        if isinstance(items, list):
+            response[key] = [_scrub(str(it)) for it in items if _scrub(str(it))]
+
+    return response
+
+
+_INBDE_STRENGTH_SENTENCE = (
+    "INBDE completion materially strengthens your DDS/DMD application competitiveness — "
+    "most IDP candidates never clear this bar, so having it already compounds every other strength."
+)
+
+
+def _ensure_inbde_strength_emphasis(
+    response: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """When INBDE passed and target is DDS/DMD or specialty, make sure expertConclusion
+    and readinessScore.strengths explicitly name INBDE as a compounding strength."""
+    if not _profile_inbde_passed(profile):
+        return response
+
+    target = str(profile.get("targetProgram", "")).lower()
+    if not any(k in target for k in ("dds", "dmd", "idp", "specialty", "residency")):
+        return response
+
+    conclusion = response.get("expertConclusion")
+    if isinstance(conclusion, str):
+        lower = conclusion.lower()
+        if "inbde" not in lower or "strengthen" not in lower:
+            conclusion = conclusion.rstrip()
+            if conclusion and not conclusion.endswith((".", "!", "?")):
+                conclusion += "."
+            conclusion = f"{conclusion} {_INBDE_STRENGTH_SENTENCE}".strip()
+            response["expertConclusion"] = conclusion
+
+    readiness = response.get("readinessScore")
+    if isinstance(readiness, dict):
+        strengths = readiness.get("strengths")
+        if isinstance(strengths, list):
+            has_inbde = any("inbde" in str(s).lower() for s in strengths)
+            if not has_inbde:
+                readiness["strengths"] = ["INBDE passed (filters out most competing applicants)", *strengths]
+
+    return response
+
+
+_I20_MISUSE_FOR_DEPENDENT_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)\bsecure\s+(?:admission\s+and\s+)?coordinate\s+I[-\s]?20\s+transfer\s+for\s+(?:an?\s+|the\s+|your\s+)?H[-\s]?4(?:\s+visa)?(?:\s+alignment)?"),
+    re.compile(r"(?i)\bsecure\s+(?:admission\s+and\s+)?coordinate\s+I[-\s]?20\s+transfer\s+for\s+(?:an?\s+|the\s+|your\s+)?L[-\s]?2(?:\s+visa)?(?:\s+alignment)?"),
+    re.compile(r"(?i)\bcoordinate\s+I[-\s]?20\s+transfer\s+for\s+(?:an?\s+|the\s+|your\s+)?H[-\s]?4(?:\s+visa)?(?:\s+alignment)?"),
+    re.compile(r"(?i)\bcoordinate\s+I[-\s]?20\s+transfer\s+for\s+(?:an?\s+|the\s+|your\s+)?L[-\s]?2(?:\s+visa)?(?:\s+alignment)?"),
+    re.compile(r"(?i)\bI[-\s]?20\s+transfer\s+for\s+(?:an?\s+|the\s+|your\s+)?H[-\s]?4(?:\s+visa)?(?:\s+alignment)?"),
+    re.compile(r"(?i)\bI[-\s]?20\s+transfer\s+for\s+(?:an?\s+|the\s+|your\s+)?L[-\s]?2(?:\s+visa)?(?:\s+alignment)?"),
+    re.compile(r"(?i)\balign\s+H[-\s]?4\s+visa\s+with\s+I[-\s]?20"),
+    re.compile(r"(?i)\bH[-\s]?4\s+visa\s+I[-\s]?20\s+transfer"),
+    # Residual trailing " visa alignment" after a partial replacement leaves hanging phrase.
+    re.compile(r"(?i)\bresid(?:e|ue)\s+visa\s+alignment\b"),
+)
+
+
+def _strip_i20_misuse_for_dependents(
+    response: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """Always strip 'I-20 transfer for H-4/L-2' phrasing from anywhere in the
+    payload — it is factually wrong for H-4/L-2 holders AND nonsensical for
+    candidates who hold a different visa. The replacement is profile-aware:
+    for H-4/L-2 candidates we use their enrollment phrase; for everyone else
+    we substitute a neutral 'align visa status with program requirements'.
+    """
+    kind = _visa_kind(profile)
+    if kind in {"H-4", "L-2"}:
+        replacement = _visa_specific_enrollment_rewrite(profile) or (
+            "ensure enrollment documentation aligns with your current dependent status"
+        )
+    elif kind == "F-1":
+        replacement = (
+            "maintain F-1 status and coordinate I-20 transfer to the admitting program"
+        )
+    elif kind in {"H-1B", "L-1"}:
+        replacement = (
+            f"plan change of status from {kind} to F-1 via the admitting program's I-20"
+        )
+    elif kind == "J-1":
+        replacement = (
+            "coordinate DS-2019 transfer with your J-1 sponsor and the admitting program"
+        )
+    elif kind == "OPT":
+        replacement = (
+            "plan academic re-entry on a fresh I-20 from the admitting program before OPT expires"
+        )
+    elif kind == "permanent":
+        replacement = "no visa action required — permanent residency clears immigration constraints"
+    else:
+        replacement = "align visa status with admitting program's requirements"
+
+    def _walk(obj: Any) -> Any:
+        if isinstance(obj, str):
+            out = obj
+            for pat in _I20_MISUSE_FOR_DEPENDENT_PATTERNS:
+                out = pat.sub(replacement, out)
+            if out != obj:
+                out = _clean_rewritten_text(out)
+            return out
+        if isinstance(obj, list):
+            return [_walk(x) for x in obj]
+        if isinstance(obj, dict):
+            return {k: _walk(v) for k, v in obj.items()}
+        return obj
+
+    return _walk(response)
+
+
+_INBDE_RESIDUAL_IN_BLOCKERS = re.compile(r"(?i)\bINBDE\b")
+
+
+def _strip_inbde_from_primary_blockers_when_done(
+    response: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """Ranked-pathway blockers for completed INBDE must never say 'INBDE not passed'."""
+    if not _profile_inbde_passed(profile):
+        return response
+    pathway = response.get("pathwayRecommendation")
+    if not isinstance(pathway, dict):
+        return response
+    ranked = pathway.get("rankedPathways")
+    if not isinstance(ranked, list):
+        return response
+    for item in ranked:
+        if not isinstance(item, dict):
+            continue
+        blockers = item.get("blockers")
+        if isinstance(blockers, list):
+            item["blockers"] = [
+                b for b in blockers
+                if not (_INBDE_RESIDUAL_IN_BLOCKERS.search(str(b))
+                        and any(p in str(b).lower() for p in ("not passed", "pending", "timing", "schedul", "clear")))
+            ]
+        reqs = item.get("requirementsStillNeeded")
+        if isinstance(reqs, list):
+            item["requirementsStillNeeded"] = [
+                r for r in reqs
+                if not (_INBDE_RESIDUAL_IN_BLOCKERS.search(str(r))
+                        and any(p in str(r).lower() for p in ("pass", "take", "schedul", "clear", "prepare")))
+            ]
+    return response
+
+
+def _enforce_f2_nuance_and_dds_wording(
+    response: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """Apply hard deterministic cleanup for F-2 profiles.
+
+    Guarantees:
+    - F-2 nuance sentence exists in visa-related risk wording.
+    - Visa readiness dimension is not over-scored and explicitly calls out
+      F-2 limited-study + likely F-1 transition reality.
+    - "Direct DDS/DMD not viable without F-1" style absolutes are rewritten.
+    """
+    if _visa_kind(profile) != "F-2":
+        return response
+
+    nuance = (
+        "F-2 allows limited study but often requires transition to F-1 for full "
+        "program participation."
+    )
+
+    risks = response.get("mainRisks")
+    if isinstance(risks, list):
+        found_visa_risk = False
+        for idx, risk in enumerate(risks):
+            if not isinstance(risk, dict):
+                continue
+            issue_l = str(risk.get("issue", "")).lower()
+            if any(k in issue_l for k in ("visa", "immigration", "f-2", "f2")):
+                found_visa_risk = True
+                updated = dict(risk)
+                updated["issue"] = "Visa alignment with program requirements"
+                updated["impactColor"] = "amber"
+                note = str(updated.get("note", "")).strip()
+                if nuance.lower() not in note.lower():
+                    note = f"{note.rstrip('.')} {nuance}".strip()
+                updated["note"] = note
+                if str(updated.get("impact", "")).strip().lower() in {"high", "critical", "blocker", "blocked", "study/work limitation"}:
+                    updated["impact"] = "Alignment required"
+                risks[idx] = updated
+                break
+        if not found_visa_risk:
+            risks.insert(0, {
+                "issue": "Visa alignment with program requirements",
+                "impact": "Alignment required",
+                "impactColor": "amber",
+                "note": nuance,
+                "evidenceBasis": "Profile indicates active F-2 dependent visa status.",
+                "assessmentType": "Evidence-Based",
+            })
+        response["mainRisks"] = risks
+
+    readiness = response.get("readinessScore")
+    if isinstance(readiness, dict):
+        dims = readiness.get("dimensions")
+        if isinstance(dims, list):
+            for dim in dims:
+                if not isinstance(dim, dict):
+                    continue
+                name_l = str(dim.get("name", "")).lower()
+                if "visa" not in name_l and "immigration" not in name_l:
+                    continue
+                raw = _extract_number(dim.get("score"))
+                score = int(raw) if raw is not None else 58
+                dim["score"] = max(50, min(65, score))
+                dim["statusColor"] = "amber"
+                dim["status"] = "Active F-2: limited study; often requires F-1 transition"
+                break
+
+    pathway = response.get("pathwayRecommendation")
+    if isinstance(pathway, dict):
+        for key in ("decisionNote", "verdict", "bestPathwayForYou", "secondaryStrategy"):
+            val = pathway.get(key)
+            if isinstance(val, str) and val.strip():
+                pathway[key] = _rewrite_dds_f1_false_blockers(val)
+        why_not = pathway.get("whyNotAlternatives")
+        if isinstance(why_not, list):
+            pathway["whyNotAlternatives"] = [
+                _rewrite_dds_f1_false_blockers(str(item)) for item in why_not
+            ]
+        ranked = pathway.get("rankedPathways")
+        if isinstance(ranked, list):
+            for item in ranked:
+                if not isinstance(item, dict):
+                    continue
+                req = item.get("requirementsStillNeeded")
+                if isinstance(req, list):
+                    item["requirementsStillNeeded"] = [
+                        _rewrite_dds_f1_false_blockers(str(r)) for r in req
+                    ]
+                blockers = item.get("blockers")
+                if isinstance(blockers, list):
+                    item["blockers"] = [
+                        _rewrite_dds_f1_false_blockers(str(b)) for b in blockers
+                    ]
+        response["pathwayRecommendation"] = pathway
+
+    response = _apply_reasoning_guards_tree(response, profile)
+    return response
+
+
+def _enforce_completed_signals(
+    response: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """Final structural pass: drop/rewrite any items that contradict already-completed
+    profile signals (INBDE pass, active study/work visa) and enforce blockers discipline."""
+    if not isinstance(response, dict):
+        return response
+
+    response["next90DaysPlan"] = _drop_done_action_items(
+        _list_of_strings(response.get("next90DaysPlan")), profile
+    )
+    response["next12To18Months"] = _drop_done_action_items(
+        _list_of_strings(response.get("next12To18Months")), profile
+    )
+
+    timeline = response.get("applicationTimeline")
+    if isinstance(timeline, list):
+        response["applicationTimeline"] = _drop_done_timeline_rows(timeline, profile)
+
+    pathway = response.get("pathwayRecommendation")
+    if isinstance(pathway, dict):
+        ranked = pathway.get("rankedPathways")
+        if isinstance(ranked, list):
+            pathway["rankedPathways"] = _clean_ranked_pathway_blockers(ranked, profile)
+
+    risks = response.get("mainRisks")
+    if isinstance(risks, list):
+        risks = _drop_inbde_risk_when_done(risks, profile)
+        risks = _rewrite_visa_risk_for_active_visa(risks, profile)
+        response["mainRisks"] = risks
+
+    readiness = response.get("readinessScore")
+    if isinstance(readiness, dict):
+        response["readinessScore"] = _drop_inbde_gap_when_done(readiness, profile)
+
+    # INBDE-conditional caveats that leaked through text rewrites.
+    response = _strip_inbde_conditional_caveats_when_done(response, profile)
+    # I-20 misuse for dependent visas.
+    response = _strip_i20_misuse_for_dependents(response, profile)
+    # Residual INBDE items in pathway blockers / requirements.
+    response = _strip_inbde_from_primary_blockers_when_done(response, profile)
+    # INBDE strength emphasis in expertConclusion when passed.
+    response = _ensure_inbde_strength_emphasis(response, profile)
+    # F-2 deterministic guardrails.
+    response = _enforce_f2_nuance_and_dds_wording(response, profile)
+
+    return response
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Full response normalization
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1858,7 +3035,7 @@ def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str,
         timeline = _fallback_application_timeline(profile)
     elif _timeline_periods_use_relative_language(timeline):
         timeline = _rewrite_timeline_periods_to_year_quarter(profile, timeline)
-    timeline = _enforce_timeline_coverage(timeline)
+    timeline = _enforce_timeline_coverage(timeline, profile)
     timeline = _enforce_timeline_feasibility(profile, timeline)
 
     myths: list[dict[str, str]] = []
@@ -1926,6 +3103,8 @@ def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str,
                     readiness_block[sub_key], profile
                 )
 
+    response = _enforce_completed_signals(response, profile)
+
     return response
 
 
@@ -1956,14 +3135,108 @@ def _build_profile_summary(answers: AnswerMap) -> str:
 
     visa = str(answers.get("q4-visa", "Not specified"))
     visa_cat = _visa_category(visa)
+    visa_kind = _visa_kind({"visaStatus": visa})
     if visa_cat == "none":
-        parts.append(f"VISA: {visa} — CRITICAL GAP. Cannot enter U.S. without F-1/J-1.")
+        parts.append(
+            f"VISA: {visa} — CRITICAL GAP. Cannot enter U.S. without F-1/J-1.\n"
+            "  DO: frame visa sequencing as admission → I-20 (F-1) or DS-2019 (J-1) → SEVIS → DS-160 → interview.\n"
+            "  DO NOT: describe the candidate as having an active study visa."
+        )
     elif visa_cat == "non-study":
-        parts.append(f"VISA: {visa} — BLOCKER. B1/B2 cannot be used for study/work. Must change status.")
+        parts.append(
+            f"VISA: {visa} — BLOCKER. B1/B2 cannot be used for study/work. Must change status to F-1.\n"
+            "  DO: treat as a hard blocker in readiness and risks.\n"
+            "  DO NOT: phrase visa as 'alignment / maintenance' — it is a blocker, not a maintenance step."
+        )
     elif visa_cat == "permanent":
-        parts.append(f"VISA: {visa} — MAJOR STRENGTH. No immigration barrier. FAFSA-eligible.")
+        parts.append(
+            f"VISA: {visa} — MAJOR STRENGTH. No immigration barrier. FAFSA-eligible.\n"
+            "  DO: score Visa & immigration 90–95 (green) and list as a strength.\n"
+            "  DO NOT: tell the candidate to apply for F-1 / J-1 or 'secure an I-20'.\n"
+            "  DO NOT: list visa acquisition in next90DaysPlan, next12To18Months, or applicationTimeline."
+        )
     else:
-        parts.append(f"VISA: {visa} — Active visa. Map to education and employment pathway constraints.")
+        # Active visa (F-1 / J-1 / H-1B / H-4 / L-1 / L-2 / OPT).
+        copy = _VISA_KIND_COPY.get(visa_kind, _VISA_KIND_COPY["unknown"])
+        per_kind_directive = {
+            "F-1": (
+                f"VISA: {visa} — ACTIVE F-1 STUDY VISA. Candidate already holds F-1.\n"
+                f"  REALITY: {copy['nuance']}\n"
+                "  DO: frame visa tasks as 'maintain F-1 status and coordinate I-20 transfer to the admitting program'.\n"
+                "  DO: score Visa & immigration 70–80 (teal). Never red for an active F-1.\n"
+                "  DO NOT: write 'secure admission → I-20 → apply for F-1' / 'begin F-1 visa' / 'plan F-1 visa sequence' — F-1 is already held.\n"
+                "  DO NOT: list 'apply for F-1' or 'obtain F-1' in any plan or timeline.\n"
+                "  DO: in mainRisks, phrase visa-related risk as 'Visa alignment with program requirements (maintain F-1 + I-20 transfer)'."
+            ),
+            "F-2": (
+                f"VISA: {visa} — ACTIVE F-2 DEPENDENT VISA.\n"
+                f"  REALITY: {copy['nuance']}\n"
+                "  DO: explain explicitly that F-2 allows limited study but often requires transition to F-1 for full program participation.\n"
+                "  DO: frame visa tasks as 'confirm each school's F-2 enrollment policy and execute F-2 → F-1 transition if required'.\n"
+                "  DO: score Visa & immigration 50–65 (amber). This is not a hard blocker like B1/B2, but it is weaker than active F-1.\n"
+                "  DO NOT: phrase F-2 as unrestricted study/work status.\n"
+                "  DO NOT: write 'Direct DDS/DMD is not viable without F-1'. Correct framing: DDS/DMD is viable via admission-led F-1 transition when required by school policy."
+            ),
+            "J-1": (
+                f"VISA: {visa} — ACTIVE J-1 EXCHANGE VISITOR VISA. Candidate already holds J-1.\n"
+                f"  REALITY: {copy['nuance']}\n"
+                "  DO: frame visa tasks as 'maintain J-1 status and coordinate DS-2019 transfer with sponsor and admitting program'.\n"
+                "  DO: flag the 212(e) 2-year home-country residency requirement as a conditional risk only if applicable; otherwise omit.\n"
+                "  DO: score Visa & immigration 65–75 (teal).\n"
+                "  DO NOT: write 'I-20 transfer' — J-1 uses DS-2019, not I-20.\n"
+                "  DO NOT: ask the candidate to 'apply for J-1' — already held."
+            ),
+            "H-1B": (
+                f"VISA: {visa} — ACTIVE H-1B WORK VISA. Candidate already holds H-1B.\n"
+                f"  REALITY: {copy['nuance']}\n"
+                "  DO: explain that full-time DDS/DMD or residency typically requires change of status from H-1B to F-1 via the admitting program's new I-20.\n"
+                "  DO: frame visa tasks as 'plan change of status to F-1 alongside admission; confirm part-time vs full-time enrollment with the school DSO'.\n"
+                "  DO: score Visa & immigration 60–70 (teal/amber). Flag compatibility with full-time study as a real (not blocker) consideration.\n"
+                "  DO NOT: write 'maintain H-1B for full-time study' without mentioning change of status — that is misleading.\n"
+                "  DO NOT: describe H-1B as a blocker outright — it is compatible with the pathway when the COS step is executed."
+            ),
+            "H-4": (
+                f"VISA: {visa} — ACTIVE H-4 DEPENDENT VISA. Candidate already holds H-4.\n"
+                f"  REALITY: {copy['nuance']}\n"
+                "  DO: explain that H-4 permits full-time study WITHOUT a new I-20; some programs may still require transition to F-1 per institutional policy.\n"
+                "  DO: frame visa tasks as 'confirm per-program enrollment policy for H-4 dependents; transition to F-1 only if the admitting program specifically requires it'.\n"
+                "  DO: note that work requires an H-4 EAD (available only when the H-1B principal is past certain green-card stages).\n"
+                "  DO: score Visa & immigration 70–80 (teal).\n"
+                "  DO NOT: write 'I-20 transfer for H-4' or 'coordinate I-20 transfer for H-4' — H-4 does NOT use I-20 directly. I-20 is F-1/M-1 only.\n"
+                "  DO NOT: describe H-4 as a study blocker — study is permitted.\n"
+                "  DO NOT: list 'apply for H-4' or 'obtain H-4' — already held."
+            ),
+            "L-1": (
+                f"VISA: {visa} — ACTIVE L-1 INTRACOMPANY WORK VISA.\n"
+                f"  REALITY: {copy['nuance']}\n"
+                "  DO: explain that full-time DDS/DMD typically requires change of status from L-1 to F-1 via the admitting program's I-20.\n"
+                "  DO: score Visa & immigration 60–70 (teal/amber).\n"
+                "  DO NOT: describe L-1 as a study visa or say 'maintain L-1 for full-time study'."
+            ),
+            "L-2": (
+                f"VISA: {visa} — ACTIVE L-2 DEPENDENT VISA.\n"
+                f"  REALITY: {copy['nuance']}\n"
+                "  DO: explain that L-2 permits study (and EAD-based work for L-2 spouses); transition to F-1 only if the admitting program specifically requires it.\n"
+                "  DO: score Visa & immigration 70–80 (teal).\n"
+                "  DO NOT: write 'I-20 transfer for L-2' — L-2 does NOT use I-20."
+            ),
+            "OPT": (
+                f"VISA: {visa} — F-1 OPT / STEM-OPT (time-limited work authorization).\n"
+                f"  REALITY: {copy['nuance']}\n"
+                "  DO: frame visa tasks as 'plan academic re-entry on a new I-20 from the admitting program before OPT expires — time is the constraint'.\n"
+                "  DO: score Visa & immigration 65–75 (teal). Flag OPT expiry proximity as a real planning constraint.\n"
+                "  DO NOT: describe OPT as equivalent to active F-1 student status — it is post-completion work only."
+            ),
+        }.get(visa_kind)
+
+        if per_kind_directive:
+            parts.append(per_kind_directive)
+        else:
+            parts.append(
+                f"VISA: {visa} — Active/unknown status. Verify kind with the candidate before committing to visa mechanics.\n"
+                "  DO: frame as 'confirm current status with the admitting program's DSO before CAAPID/PASS submission'.\n"
+                "  DO NOT: assume I-20 applies without confirming F-1 status."
+            )
 
     masters = answers.get("q5-masters-vs-home", "Not specified")
     parts.append(f"MASTER'S WILLINGNESS: {masters}")
@@ -1998,9 +3271,21 @@ def _build_profile_summary(answers: AnswerMap) -> str:
 
     inbde = str(answers.get("q8-inbde", "Not specified")).strip().lower()
     if inbde == "yes":
-        parts.append("INBDE: PASSED — MAJOR STRENGTH. Most applications rejected without this.")
+        parts.append(
+            "INBDE: PASSED — MAJOR STRENGTH. Most applications rejected without this.\n"
+            "  DO: phrase as 'leverage INBDE pass for applications' / 'INBDE requirement satisfied'.\n"
+            "  DO NOT: tell the candidate to 'schedule INBDE', 'pass INBDE', 'take INBDE', "
+            "or treat INBDE timing as a gating risk.\n"
+            "  DO NOT: list 'pass INBDE' (or any variant) in next90DaysPlan, next12To18Months, "
+            "or applicationTimeline. INBDE is DONE.\n"
+            "  DO: do not include 'INBDE timing' or 'INBDE not passed' in readinessScore.gaps or mainRisks."
+        )
     elif inbde == "no":
-        parts.append("INBDE: NOT PASSED — #1 BLOCKER. Most programs will not review.")
+        parts.append(
+            "INBDE: NOT PASSED — #1 BLOCKER. Most programs will not review.\n"
+            "  DO: surface INBDE passing as the top priority in next90DaysPlan and applicationTimeline.\n"
+            "  DO NOT: describe INBDE as 'completed' or 'leverage INBDE'."
+        )
     else:
         parts.append(f"INBDE: {inbde} — Status unclear.")
 
@@ -2272,6 +3557,7 @@ The candidate has paid for expert guidance. A Google search produces generic ans
 33. **Specialty viability is multi-conditional, not single-gated.** Never phrase specialty flip as *"If INBDE passed → specialty viable"* alone. Whenever specialty is discussed (in `flipConditions`, `secondaryStrategy`, `whyNotAlternatives`, or `rankedPathways`), enumerate the full condition stack: **(1) INBDE pass, (2) study visa (F-1/J-1) sequenced via admission → I-20, (3) program-specific FTD eligibility verified with that specialty program, (4) awareness that some specialty programs prefer or require a CODA DDS/DMD, (5) competitive specialty-specific credentials (CBSE for OMFS, research/publications, letters).** Specialty is **program-dependent**, not a general unlock.
 34. **Visa dimension scoring — fixed caps (universal).** For `readinessScore.dimensions` where `name` relates to visa/immigration:
     - **B1/B2, none, "not specified", tourist, visitor** → `score` ≤ **25**, `statusColor: red`, status wording must name the blocker (e.g., *"B1/B2 blocks study/work"*).
+    - **F-2 dependent visa** → `score` **50–65**, `statusColor: amber`, status wording must mention *"limited study; often requires F-1 transition for full program participation"*.
     - **Active study/work visa** (F-1, J-1, H-1B, H-4, L-1/L-2, OPT) → `score` 55–75, `statusColor: amber` or `teal` depending on remaining duration risk.
     - **Permanent status** (green card / U.S. citizen) → `score` 85–95, `statusColor: green`.
     Never inflate a B1/B2 profile into the 40+ range just because other dimensions are strong.
@@ -2282,6 +3568,17 @@ The candidate has paid for expert guidance. A Google search produces generic ans
 39. **`verdict` must state pathway realism, not just signal balance.** `verdict` is 2–3 sentences and must include **both**: (a) the candidate's strength/weakness balance (strong X but blocked on Y), **and** (b) the primary-pathway realism (e.g., *"DDS/DMD IDP is the more reliable anchor given current blockers; specialty remains conditional and program-specific."*). A verdict that lists strengths/weaknesses without naming which pathway is realistic is incomplete.
 40. **"Do NOT do this" must include a pathway-realism antipattern.** The antipattern set surfaced in `mainRisks` / `flipConditions` / `whyNotAlternatives` (per HARD RULE 24) must include **at least one** item tied to pathway realism, e.g.: *"Do not rely only on specialty pathway without confirmed program-specific FTD eligibility."*, *"Do not apply to IDP programs before passing INBDE and securing a viable F-1 pathway."*, *"Do not skip DDS/DMD IDP planning while chasing specialty-only options."*
 41. **Readiness overall — do not inflate when primary-path is unrealistic.** Beyond HARD RULE 29 (dual blockers → low-to-mid 50s), also: if `primaryPathway` would be "Specialty Residency" but the feasibility gate in HARD RULE 32 is not met, **force the primary to DDS/DMD IDP** *before* setting `readinessScore.overall`; do not reward an inflated overall driven by a wish-list pathway. `overall` must reflect readiness for the pathway you actually recommend.
+42. **Respect already-completed profile signals (do not re-prescribe done steps).** The `PROFILE ANALYSIS` block is authoritative. If it says **INBDE: PASSED**, you MUST NOT tell the candidate to *schedule, take, prepare for, or pass* INBDE anywhere (`next90DaysPlan`, `next12To18Months`, `applicationTimeline`, `readinessScore.gaps`, `mainRisks`, `dentnavServices`, `expertConclusion`, `pathwayRecommendation.*`). Treat INBDE as satisfied and use phrasing like *"leverage INBDE completion for applications"*. Same rule for every other already-completed signal (e.g., credential evaluation done, observership done, master's enrolled). If a signal is marked **NOT PASSED** / missing, the opposite applies — surface it.
+43. **Active-visa holders do NOT follow the naive admission→I-20→F-1 sequence unless their visa truly requires transition.** If the profile shows an active visa (**F-1, F-2, J-1, H-1B, H-4, OPT, L-1/L-2**), do not blindly write first-time-acquisition phrasing. For **F-1/J-1/H-4/L-2/OPT**, frame as status maintenance + transfer alignment. For **H-1B/L-1/F-2**, frame as school-specific compatibility and potential/likely transition to F-1 when full-time professional enrollment requires it. Never collapse these into one generic sentence.
+44. **`blockers` must be concrete and profile-specific — never vague.** In `pathwayRecommendation.rankedPathways[].blockers`, you MUST NOT use *"None"*, *"None significant"*, *"No significant blockers"*, *"No major blockers"*, *"N/A"*, *"No blockers"*, or empty/one-word evasions. Every ranked pathway has **at least one remaining conditional barrier** for an FTD (e.g., *"Specialty program-specific FTD eligibility not yet verified"*, *"Admission and I-20 transfer not yet secured"*, *"ECE/WES evaluation pending"*, *"School shortlist and SOP/LOR assembly not finalized"*, *"Competitive specialty credentials (CBSE / research / publications) not yet documented"*, *"Funding execution with cosigner not finalized"*, *"State-board clinical-exam pathway still to be chosen"*). If a pathway truly has no hard blocker, phrase it as *"No hard blockers — conditional on program-by-program verification (CAAPID/PASS)"*.
+45. **Visa-related risk wording mirrors visa state.** In `mainRisks[].issue` and `mainRisks[].impact`, never contradict the active-visa framing of HARD RULE 43. For an **active study/work visa**, an allowed issue heading is *"Visa alignment with program requirements"*, *"Maintain F-1 / transfer I-20 in time"*, or *"Sponsorship strategy post-licensure"* — NEVER *"Visa pathway for specialty"*, *"Visa pathway limitation"*, *"Visa blocker"*, or *"Study/work limitation"*. `impactColor` for an active visa must be `amber` or `teal`, never `red`. For non-study / none, the reverse applies — phrase as a hard blocker with `red`.
+46. **`next90DaysPlan`, `next12To18Months`, and `applicationTimeline` must not list already-completed steps as pending work.** If INBDE is passed, do not list any INBDE item. If visa is active study/work, do not list F-1/J-1 acquisition. If credential evaluation is already on file, do not list ECE/WES as pending. Replace the slot with a forward-looking step (program-specific FTD eligibility verification, CAAPID/PASS assembly milestones, bench-test prep windows, interview prep, funding finalization, post-acceptance relocation). The reader should never see a "to-do" they have already finished.
+47. **I-20 is an F-1/M-1 document — never attach it to other visa kinds.** NEVER write *"coordinate I-20 transfer for H-4"*, *"I-20 transfer for H-1B"*, *"I-20 for L-2"*, *"align H-4 visa with the I-20 transfer process"*, or any equivalent. For **H-4** and **L-2** dependents, study is permitted WITHOUT a new I-20 — phrase as *"confirm per-program enrollment policy for H-4 / L-2 dependents; transition to F-1 only if the admitting program specifically requires it"*. For **H-1B** and **L-1** principals, full-time study typically requires a change of status to F-1 via the admitting program's new I-20 — phrase that explicitly. For **J-1**, the document is **DS-2019** (never I-20). For **OPT/STEM-OPT**, the candidate must transition to a new I-20 from the admitting program before OPT expires.
+48. **Active-visa nuance must be mentioned where it changes the plan.** For **H-4 / L-2**: mention that work requires an H-4/L-2 EAD (and EAD availability depends on the principal's status / stage). For **J-1**: surface the 212(e) two-year home-residency requirement as a conditional consideration (not a blocker) if it may apply. For **H-1B**: surface full-time-enrollment compatibility (change of status to F-1) as a conditional consideration. For **OPT**: surface OPT-window expiry as a real planning constraint.
+49. **Emphasize already-satisfied major signals.** When INBDE is passed AND the target is DDS/DMD or specialty, the `expertConclusion` MUST contain an explicit sentence that INBDE completion materially strengthens application competitiveness (e.g., *"INBDE completion materially strengthens your DDS/DMD application competitiveness — most IDP applications are filtered out before INBDE, so clearing it already is a compounding advantage."*). Do not bury this strength.
+50. **Conditional-execution caveats must match reality.** Never write *"Apply in the same cycle only if INBDE is cleared early …"* when the profile shows INBDE PASSED. Never write *"once INBDE clears"* or *"before INBDE clears"* for a candidate who already passed INBDE. Use forward-looking, execution-oriented conditionals instead (e.g., *"Apply in the same cycle only if ECE/WES, SOP, and LORs are fully ready by the portal opening; otherwise shift to the next viable window."*).
+51. **F-2 wording must be explicit and realistic.** If visa is **F-2**, include this substance somewhere in `mainRisks` / `verdict` / `applicationTimeline`: *"F-2 allows limited study but often requires transition to F-1 for full program participation."* Never describe F-2 as unrestricted study/work status. Never omit the transition possibility.
+52. **Do not present DDS/DMD as impossible because F-1 is not yet active.** You may say F-1 transition is required by many schools, but never write *"Direct DDS/DMD not viable without F-1"* as an absolute. Correct framing: *"DDS/DMD is viable via admission-led F-1 transition when required by school policy."*
 
 ## TONE & DEPTH
 
@@ -2452,6 +3749,11 @@ async def generate_analysis_from_answers(answers: AnswerMap) -> dict[str, Any]:
                 "- `verdict` must state BOTH strength/weakness balance AND pathway realism (which pathway is realistic given current blockers) (HARD RULE 39).\n"
                 "- Antipattern set must include at least one pathway-realism 'do not' (e.g., 'Do not rely on specialty alone without confirmed program-specific FTD eligibility') (HARD RULE 40).\n"
                 "- readinessScore.overall must reflect readiness for the pathway you actually recommend — do not inflate because of a wish-list target (HARD RULE 41).\n"
+                "- HONOR COMPLETED SIGNALS (HARD RULE 42): if the PROFILE ANALYSIS block marks INBDE as PASSED, you MUST NOT list 'schedule INBDE' / 'pass INBDE' / 'take INBDE' anywhere. Re-read next90DaysPlan, next12To18Months, applicationTimeline, mainRisks, readinessScore.gaps, dentnavServices, and remove any such items before returning.\n"
+                "- ACTIVE-VISA FRAMING (HARD RULE 43): if the PROFILE ANALYSIS block marks visa as ACTIVE STUDY/WORK (F-1, J-1, H-1B, H-4, OPT, L-1/L-2), you MUST NOT write 'secure admission → I-20 → F-1', 'apply for F-1 visa', 'begin F-1 visa', 'plan F-1 visa sequence'. Replace with 'maintain F-1 status and coordinate I-20 transfer to the admitting program' or equivalent. The admission→I-20→F-1 acquisition flow applies ONLY to candidates with no visa / B1/B2.\n"
+                "- BLOCKERS DISCIPLINE (HARD RULE 44): NEVER emit blockers: ['None'], ['None significant'], ['No major blockers'], or empty/vague variants. Every ranked pathway has at least one remaining conditional barrier — name it (e.g., 'Specialty program-specific FTD eligibility not yet verified', 'Admission + I-20 transfer not yet secured', 'ECE/WES not yet on file', 'Specialty credentials (CBSE / research) not documented', 'Funding execution not finalized').\n"
+                "- VISA RISK WORDING (HARD RULE 45): for an active study/work visa, mainRisks visa items read 'Visa alignment with program requirements' or 'Maintain F-1 / transfer I-20 in time' — NEVER 'Visa pathway for specialty', 'Visa pathway limitation', 'Visa blocker', 'Study/work limitation'. impactColor is amber or teal, never red.\n"
+                "- DO NOT RE-PRESCRIBE DONE STEPS (HARD RULE 46): in next90DaysPlan / next12To18Months / applicationTimeline, skip every step the candidate already has (INBDE pass, active visa acquisition, master's enrollment if already committed). Replace the slot with forward-looking work (program-specific FTD eligibility verification, SOP/LOR assembly, bench/interview prep, funding finalization, relocation/matriculation prep).\n"
                 "- No boilerplate phrases; institutional terminology used throughout\n\n"
                 f"Raw questionnaire answers:\n{_stringify_answers(answers)}"
             ),

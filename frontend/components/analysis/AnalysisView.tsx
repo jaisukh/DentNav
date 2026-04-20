@@ -1,12 +1,12 @@
-import type { AnalysisResultPayload } from "@/lib/analysis.types";
+import type { AnalysisPreviewPayload } from "@/lib/analysis.types";
 import { Footer } from "@/components/home/Footer";
 import { NavBar } from "@/components/home/NavBar";
-import { AnalysisResultsCard } from "./AnalysisResultsCard";
 import { AnalysisTopStrip } from "./AnalysisTopStrip";
 import { BlurredRoadmapSection } from "./BlurredRoadmapSection";
+import { ReadinessScoreCard } from "./ReadinessScoreCard";
 
 type AnalysisViewProps = {
-  data: AnalysisResultPayload;
+  data: AnalysisPreviewPayload;
 };
 
 export function AnalysisView({ data }: AnalysisViewProps) {
@@ -15,11 +15,10 @@ export function AnalysisView({ data }: AnalysisViewProps) {
       <NavBar />
 
       <main className="relative flex w-full flex-col items-stretch">
-        {/* Overlap: strip sits under nav; card overlaps strip (Figma: card top ~206px from frame, strip starts ~96px) */}
-        <div className="relative pt-0">
+        <div className="relative bg-[rgba(201,230,255,0.3)] pb-8">
           <AnalysisTopStrip data={data} />
-          <div className="relative z-[2] -mt-14 px-6 sm:-mt-16 lg:px-[152px]">
-            <AnalysisResultsCard data={data} />
+          <div className="relative mt-3 px-6 lg:px-[152px]">
+            <ReadinessScoreCard data={data.readinessScore} />
           </div>
         </div>
 

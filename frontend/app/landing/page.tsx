@@ -1,20 +1,45 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { BrochureDownload } from "@/components/landing/BrochureDownload";
 import { LandingVideoSection } from "@/components/landing/LandingVideoSection";
 import { PaymentPrompt } from "@/components/landing/PaymentPrompt";
 import { QuestionnairePrompt } from "@/components/landing/QuestionnairePrompt";
 import { ViewAnalysis } from "@/components/landing/ViewAnalysis";
+import {
+  type LandingAccessStatus,
+  fetchLandingAccessStatus,
+} from "@/lib/api/landing";
 
-/*
- * ─── Feature flags ───────────────────────────────────────────────────
- * HAS_ANSWERED_QUESTIONNAIRE: false → questionnaire prompt
- * HAS_PAID: false → payment prompt, true → view analysis
- * TODO: Replace with a real API call.
- * ─────────────────────────────────────────────────────────────────────
- */
-const HAS_ANSWERED_QUESTIONNAIRE = true;
-const HAS_PAID = false;
+const DEFAULT_STATUS: LandingAccessStatus = {
+  signedIn: false,
+  hasAnsweredQuestionnaire: false,
+  hasPaid: false,
+  latestAnalysisId: null,
+};
 
 export default function LandingPage() {
+  const [status, setStatus] = useState<LandingAccessStatus>(DEFAULT_STATUS);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function loadStatus() {
+      try {
+        const next = await fetchLandingAccessStatus();
+        if (active) setStatus(next);
+      } catch {
+        if (active) setStatus(DEFAULT_STATUS);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void loadStatus();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <div className="w-full max-w-6xl pb-6">
 
@@ -62,9 +87,13 @@ export default function LandingPage() {
 
       {/* ── Prompt card ──────────────────────────────────────────────── */}
       <div className="w-full">
-        {!HAS_ANSWERED_QUESTIONNAIRE ? (
+        {loading ? (
+          <div className="rounded-3xl border border-[#E2E8F0] bg-white p-8 text-sm font-medium text-[#64748B]">
+            Checking your account progress...
+          </div>
+        ) : !status.hasAnsweredQuestionnaire ? (
           <QuestionnairePrompt />
-        ) : !HAS_PAID ? (
+        ) : !status.hasPaid ? (
           <PaymentPrompt />
         ) : (
           <ViewAnalysis />

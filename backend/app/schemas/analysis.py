@@ -155,3 +155,45 @@ class AnalysisResultPayload(BaseModel):
     @classmethod
     def _body_to_list_friendly(cls, v: Any) -> Any:
         return v
+
+
+class ProfileSnapshotPreview(BaseModel):
+    country: str = ""
+    degree: str = ""
+    clinicalExperience: str = ""
+
+
+class AnalysisPreviewResponse(BaseModel):
+    """
+    Public preview returned from POST /api/v1/analysis.
+
+    Intentionally narrow: only the readiness score breakdown + profile snapshot
+    fields needed for the locked preview UI. The full payload (pathway, risks,
+    timeline, body) is stored server-side and only released through the gated
+    endpoint after sign-in + payment.
+    """
+
+    analysisId: str
+    country: str = ""
+    degree: str = ""
+    yearsOfExp: str = ""
+    performance: int = Field(ge=0, le=100, default=0)
+    readinessScore: ReadinessScore = Field(
+        default_factory=lambda: ReadinessScore(overall=0)
+    )
+    profileSnapshot: ProfileSnapshotPreview = Field(default_factory=ProfileSnapshotPreview)
+    paid: bool = False
+
+
+class AnalysisAccessStatusResponse(BaseModel):
+    """
+    Compact status for landing page gating.
+
+    - hasAnsweredQuestionnaire: whether we have at least one analysis row for the user.
+    - hasPaid: whether the latest claimed analysis is paid.
+    """
+
+    signedIn: bool = False
+    hasAnsweredQuestionnaire: bool = False
+    hasPaid: bool = False
+    latestAnalysisId: str | None = None

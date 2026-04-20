@@ -7,11 +7,10 @@ import {
   clearAnalysisResultFromSession,
   peekAnalysisResultFromSession,
 } from "@/lib/analysis-session";
-import { fetchAnalysis } from "@/lib/api/analysis";
-import type { AnalysisResultPayload } from "@/lib/analysis.types";
+import type { AnalysisPreviewPayload } from "@/lib/analysis.types";
 
 export default function AnalysisPage() {
-  const [data, setData] = useState<AnalysisResultPayload | null>(null);
+  const [data, setData] = useState<AnalysisPreviewPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -23,7 +22,7 @@ export default function AnalysisPage() {
       const raw = sessionStorage.getItem(analysisHandoffStorageKey(handoffId));
       if (raw) {
         try {
-          const payload = JSON.parse(raw) as AnalysisResultPayload;
+          const payload = JSON.parse(raw) as AnalysisPreviewPayload;
           setData(payload);
           queueMicrotask(() => {
             if (cancelled) return;
@@ -37,7 +36,7 @@ export default function AnalysisPage() {
             cancelled = true;
           };
         } catch {
-          /* fall through to legacy / GET */
+          /* fall through to legacy session */
         }
       }
     }
@@ -58,13 +57,7 @@ export default function AnalysisPage() {
       };
     }
 
-    fetchAnalysis()
-      .then((payload) => {
-        if (!cancelled) setData(payload);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Could not load analysis.");
-      });
+    setError("No analysis to display. Please complete the questionnaire.");
     return () => {
       cancelled = true;
     };
