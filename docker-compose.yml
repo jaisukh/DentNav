@@ -47,6 +47,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Baked into the client bundle at build time; runtime env alone does not fix NEXT_PUBLIC_*.
+        NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
     container_name: dentnav-frontend
     environment:
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
