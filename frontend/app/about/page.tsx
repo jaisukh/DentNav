@@ -137,12 +137,12 @@ export default function AboutPage() {
               </p>
               <div className="mx-auto mt-2 max-w-[880px] rounded-3xl border border-[#DCEBFF] bg-white/85 px-6 py-6 shadow-[0_18px_40px_-26px_rgba(2,132,199,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_24px_56px_-26px_rgba(2,132,199,0.34)] sm:px-8 sm:py-7">
                 <p className="text-balance text-base font-medium leading-7 text-[#334155] sm:text-lg sm:leading-8">
-                  "There is no single path to becoming a dentist in the United
+                  &ldquo;There is no single path to becoming a dentist in the United
                   States. There are multiple pathways, DDS/DMD, residencies,
                   limited licenses, and academic roles. The right path depends on
                   your background, goals, and strategy. The difference between
                   struggle and success is not talent, it is guidance. That is
-                  where we come in."
+                  where we come in.&rdquo;
                 </p>
               </div>
               <div className="mt-2 grid gap-3 sm:grid-cols-3">
@@ -314,7 +314,7 @@ export default function AboutPage() {
                     </div>
 
                     <blockquote className="mt-6 rounded-2xl border border-[#DBEAFE] bg-[#EFF6FF] p-5 text-base font-semibold leading-7 text-[#1E40AF] transition-all duration-300 hover:bg-[#E0F2FE]">
-                      "{founder.quote}"
+                      &ldquo;{founder.quote}&rdquo;
                     </blockquote>
                   </div>
                 </div>

@@ -112,6 +112,12 @@ class StatePlanningState(BaseModel):
     name: str = ""
     notes: str = ""
     competitiveness: str = ""
+    licenseRoute: str = ""
+    examExpectation: str = ""
+    visaSponsorshipReality: str = ""
+    timelineHint: str = ""
+    priorityActions: list[str] = Field(default_factory=list)
+    riskFlags: list[str] = Field(default_factory=list)
 
 
 class StatePlanning(BaseModel):
