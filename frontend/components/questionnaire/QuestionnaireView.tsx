@@ -42,8 +42,36 @@ export function QuestionnaireView() {
   const [submitting, setSubmitting] = useState(false);
 
   const setAnswer = useCallback((id: string, v: AnswerValue) => {
-    setAnswers((prev) => ({ ...prev, [id]: v }));
-  }, []);
+    setAnswers((prev) => {
+      const next: Record<string, AnswerValue> = { ...prev, [id]: v };
+
+      if (!doc) return next;
+
+      if (id === "q1-degree-country") {
+        const country = typeof v === "string" ? v.trim() : "";
+        if (!country) {
+          delete next["q1b-degree-type"];
+          return next;
+        }
+        const allowed = doc.degreesByCountry[country];
+        const degree = next["q1b-degree-type"];
+        if (typeof degree === "string" && degree && (!allowed?.length || !allowed.includes(degree))) {
+          next["q1b-degree-type"] = "";
+        }
+      }
+
+      if (id === "q1b-degree-type") {
+        const countryRaw = next["q1-degree-country"];
+        const country = typeof countryRaw === "string" ? countryRaw.trim() : "";
+        const allowed = country ? doc.degreesByCountry[country] : undefined;
+        if (typeof v === "string" && v && (!allowed?.length || !allowed.includes(v))) {
+          next["q1b-degree-type"] = "";
+        }
+      }
+
+      return next;
+    });
+  }, [doc]);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,27 +86,6 @@ export function QuestionnaireView() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (!doc) return;
-    const countryRaw = answers["q1-degree-country"];
-    const country = typeof countryRaw === "string" ? countryRaw.trim() : "";
-    if (!country) {
-      setAnswers((prev) => {
-        if (prev["q1b-degree-type"] === undefined) return prev;
-        const next = { ...prev };
-        delete next["q1b-degree-type"];
-        return next;
-      });
-      return;
-    }
-    const allowed = doc.degreesByCountry[country];
-    if (!allowed?.length) return;
-    const deg = answers["q1b-degree-type"];
-    if (typeof deg === "string" && deg && !allowed.includes(deg)) {
-      setAnswers((prev) => ({ ...prev, "q1b-degree-type": "" }));
-    }
-  }, [answers, doc]);
 
   const total = doc?.questions.length ?? 0;
   const filled = useMemo(() => {

@@ -8,7 +8,6 @@ from openai import AsyncOpenAI
 from app.config import settings
 from app.services.answers_validate import AnswerMap
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Knowledge Base — FULL verbatim content from DentNav Knowledge Base PDF
 # ─────────────────────────────────────────────────────────────────────────────
@@ -562,7 +561,7 @@ def _compute_readiness_dimensions(answers: AnswerMap) -> list[dict[str, Any]]:
 def _estimate_performance_from_answers(answers: AnswerMap) -> int:
     dims = _compute_readiness_dimensions(answers)
     weights = [0.20, 0.15, 0.15, 0.20, 0.15, 0.15]
-    weighted = sum(d["score"] * w for d, w in zip(dims, weights))
+    weighted = sum(d["score"] * w for d, w in zip(dims, weights, strict=False))
     return int(max(35, min(95, round(weighted))))
 
 
@@ -979,7 +978,7 @@ _NON_IDP_SCHOOL_PATTERNS = (
     re.compile(r"(?i)\bIDP:\s*Midwestern[^.]*Arizona[^.]*"),
 )
 
-_VERIFY_CAAPID_FALLBACK = "verify the current ADEA CAAPID program list — this school's IDP/advanced-standing status is not confirmed"
+_VERIFY_CAAPID_FALLBACK = "Verify IDP availability via the latest ADEA CAAPID program list."
 
 
 def _scrub_unverified_idp_claims(text: str) -> str:
@@ -1053,7 +1052,7 @@ def _align_pathway_secondary_for_profile(profile: dict[str, Any], pathway: dict[
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Reasoning-quality guards (HARD RULES 19–24)
+# Reasoning-quality guards (HARD RULES 19+)
 # Catch overclaiming, wrong visa sequencing, mandatory-master's phrasing, and
 # overbroad license-portability claims that the LLM tends to default to.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1176,6 +1175,73 @@ def _rewrite_broad_portability_claims(text: str) -> str:
     return out
 
 
+_STATE_IDP_ABSOLUTE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(r"(?i)\b([A-Z][a-z]+)\s+lacks\s+(?:a\s+)?(?:dedicated\s+)?IDP\s+(?:program|option)s?\b"),
+        r"\1 currently has limited or no widely recognized IDP options — verify via the latest ADEA CAAPID program list",
+    ),
+    (
+        re.compile(r"(?i)\b([A-Z][a-z]+)\s+has\s+no\s+IDP\s+(?:program|option)s?\b"),
+        r"\1 has limited IDP availability; verify via the latest ADEA CAAPID program list before planning",
+    ),
+    (
+        re.compile(r"(?i)\bthere\s+is\s+no\s+IDP\s+in\s+([A-Z][a-z]+)\b"),
+        r"IDP availability in \1 is limited/variable by cycle; verify via the latest ADEA CAAPID program list",
+    ),
+]
+
+
+def _rewrite_absolute_state_idp_claims(text: str) -> str:
+    if not text:
+        return text
+    out = text
+    for pat, replacement in _STATE_IDP_ABSOLUTE_PATTERNS:
+        out = pat.sub(replacement, out)
+    return out
+
+
+_DIRECT_LICENSURE_ABSOLUTE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(r"(?i)\bdirect\s+(?:state\s+)?licensure\s+is\s+not\s+viable\b"),
+        "direct state licensure is generally not viable without U.S.-recognized training in your case",
+    ),
+    (
+        re.compile(r"(?i)\bdirect\s+(?:state\s+)?licensure\s+is\s+impossible\b"),
+        "direct state licensure is generally not viable without U.S.-recognized training in your case",
+    ),
+]
+
+
+def _rewrite_direct_licensure_absolutes(text: str) -> str:
+    if not text:
+        return text
+    out = text
+    for pat, replacement in _DIRECT_LICENSURE_ABSOLUTE_PATTERNS:
+        out = pat.sub(replacement, out)
+    return out
+
+
+_TOEFL_OVERSALE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(r"(?i)\bTOEFL[^.]{0,80}\b(excellent|exceptional|outstanding)\b"),
+        "TOEFL score is competitive for most programs",
+    ),
+    (
+        re.compile(r"(?i)\bTOEFL[^.]{0,80}\bstrongly\s+competitive\b"),
+        "TOEFL score is competitive for most programs",
+    ),
+]
+
+
+def _rewrite_toefl_oversell(text: str) -> str:
+    if not text:
+        return text
+    out = text
+    for pat, replacement in _TOEFL_OVERSALE_PATTERNS:
+        out = pat.sub(replacement, out)
+    return out
+
+
 def _apply_reasoning_guards_to_text(text: Any, profile: dict[str, Any]) -> Any:
     if not isinstance(text, str) or not text.strip():
         return text
@@ -1184,6 +1250,9 @@ def _apply_reasoning_guards_to_text(text: Any, profile: dict[str, Any]) -> Any:
     out = _rewrite_visa_application_phrasing(out)
     out = _rewrite_complete_masters_phrasing(out)
     out = _rewrite_broad_portability_claims(out)
+    out = _rewrite_absolute_state_idp_claims(out)
+    out = _rewrite_direct_licensure_absolutes(out)
+    out = _rewrite_toefl_oversell(out)
     return out
 
 
@@ -1195,6 +1264,116 @@ def _apply_reasoning_guards_tree(obj: Any, profile: dict[str, Any]) -> Any:
     if isinstance(obj, dict):
         return {k: _apply_reasoning_guards_tree(v, profile) for k, v in obj.items()}
     return obj
+
+
+def _profile_has_dual_critical_blockers(profile: dict[str, Any]) -> bool:
+    """Critical blockers = INBDE not passed + visa status not study/work viable."""
+    inbde = str(profile.get("inbdeStatus", "")).strip().lower()
+    visa = str(profile.get("visaStatus", "")).strip().lower()
+    inbde_blocked = any(
+        token in inbde for token in ("not", "no", "pending", "fail", "not passed", "not pass")
+    )
+    visa_blocked = (
+        visa in {"", "none", "not specified", "unknown"}
+        or "b1" in visa
+        or "b2" in visa
+        or "visitor" in visa
+        or "tourist" in visa
+    )
+    return bool(inbde_blocked and visa_blocked)
+
+
+def _cap_readiness_overall_for_critical_blockers(score: int, profile: dict[str, Any]) -> int:
+    """Prevent over-scoring when both INBDE and visa are hard blockers."""
+    if _profile_has_dual_critical_blockers(profile):
+        return min(score, 55)
+    return score
+
+
+def _ensure_biggest_lever_note(pathway: dict[str, Any], profile: dict[str, Any]) -> None:
+    if not _profile_has_dual_critical_blockers(profile):
+        return
+    note = str(pathway.get("decisionNote", "")).strip()
+    if "biggest lever" in note.lower():
+        return
+    lever = (
+        "Biggest lever: pass INBDE and secure an admission-led F-1 pathway "
+        "(admission → I-20 → visa); this unlocks everything else."
+    )
+    pathway["decisionNote"] = f"{note} {lever}".strip() if note else lever
+
+
+def _enforce_timeline_coverage(timeline: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Ensure key pathway checkpoints appear somewhere across 5-6 timeline rows."""
+    if not timeline:
+        return timeline
+    out = [dict(item) for item in timeline]
+    blob = " ".join(
+        f"{str(i.get('milestone', ''))} {str(i.get('detail', ''))}".lower() for i in out
+    )
+
+    checkpoints: list[tuple[tuple[str, ...], int, str]] = [
+        (("dentpin",), 0, "Create DENTPIN before any ADEA portal work."),
+        (
+            ("admission", "i-20", "sevis", "ds-160", "visa"),
+            0,
+            "Map visa sequence explicitly: admission → I-20 → SEVIS fee → DS-160 → visa interview.",
+        ),
+        (("ece", "wes", "credential"), min(1, len(out) - 1), "Complete ECE/WES credential evaluation."),
+        (
+            ("inbde",),
+            min(2, len(out) - 1),
+            "Schedule and pass INBDE early enough to avoid compressing application execution.",
+        ),
+        (
+            ("sop", "lor", "cv"),
+            min(2, len(out) - 1),
+            "Prepare SOP/CV and request LORs with enough lead time before portal submission.",
+        ),
+        (
+            ("caapid", "pass", "application", "portal"),
+            min(3, len(out) - 1),
+            "Submit CAAPID/PASS applications only after key prerequisites are in place.",
+        ),
+        (("bench", "interview"), min(4, len(out) - 1), "Complete bench-test and interview preparation."),
+        (
+            ("decision", "offer", "matriculation", "relocation"),
+            len(out) - 1,
+            "Track offers, complete onboarding, and prepare relocation/matriculation.",
+        ),
+    ]
+
+    for tokens, idx, phrase in checkpoints:
+        if any(t in blob for t in tokens):
+            continue
+        detail = str(out[idx].get("detail", "")).strip()
+        out[idx]["detail"] = f"{detail} {phrase}".strip() if detail else phrase
+        blob += f" {phrase.lower()}"
+    return out
+
+
+def _enforce_timeline_feasibility(profile: dict[str, Any], timeline: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Avoid unrealistically tight INBDE→apply sequencing when INBDE is not yet passed."""
+    if not timeline:
+        return timeline
+    inbde = str(profile.get("inbdeStatus", "")).strip().lower()
+    if any(t in inbde for t in ("pass", "passed", "done", "complete")):
+        return timeline
+
+    out = [dict(item) for item in timeline]
+    caution = (
+        "Apply in the same cycle only if INBDE is cleared early and documents "
+        "(ECE/WES, SOP, LORs) are fully ready; otherwise shift to the next viable window."
+    )
+    for item in out:
+        period = str(item.get("period", ""))
+        detail = str(item.get("detail", ""))
+        milestone = str(item.get("milestone", ""))
+        apply_related = any(k in f"{milestone} {detail}".lower() for k in ("apply", "application", "caapid", "pass"))
+        early_period = bool(re.search(r"\bQ[12]\s+20[0-9]{2}\b", period))
+        if apply_related and early_period and "same cycle only if inbde is cleared early" not in detail.lower():
+            item["detail"] = f"{detail} {caution}".strip()
+    return out
 
 
 def _normalize_myth_item(raw: Any) -> dict[str, str]:
@@ -1428,10 +1607,10 @@ def _fallback_application_timeline(profile: dict[str, Any]) -> list[dict[str, st
          "Create DENTPIN. Research U.S. master's / IDP options that can issue an I-20 (admission → I-20 → SEVIS fee → DS-160 → F-1 visa interview)."),
         ("amber", "Credential evaluation + profile build",
          "Start ECE/WES. Secure visa pathway. Strengthen observerships and CV."),
-        ("purple", "SOP, CV & LORs",
-         "Draft personal statement; request LORs well before the portal season."),
+        ("purple", "INBDE + SOP/CV/LOR readiness",
+         "Pass INBDE and complete SOP/CV/LOR preparation with enough lead time before submission windows."),
         ("purple", "ADEA CAAPID / PASS portal season",
-         "Finalize applications; track program-specific requirements and deadlines."),
+         "Finalize submissions only after INBDE + core documents are ready; if INBDE clears late, shift to the next viable cycle."),
         ("teal", "Bench tests + interviews",
          "Program-specific practical assessments and interviews."),
         ("teal", "Decisions + matriculation prep",
@@ -1568,6 +1747,7 @@ def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str,
     performance = int(max(35, min(95, round(
         _extract_number(readiness_raw.get("overall")) or _estimate_performance_from_answers(answers)
     ))))
+    performance = _cap_readiness_overall_for_critical_blockers(performance, profile)
     readiness_status = str(readiness_raw.get("status", "")).strip() or _default_readiness_status(performance)
 
     dims_raw = readiness_raw.get("dimensions", [])
@@ -1648,6 +1828,7 @@ def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str,
         )
 
     _align_pathway_secondary_for_profile(profile, pathway)
+    _ensure_biggest_lever_note(pathway, profile)
 
     next_90 = _list_of_strings(parsed.get("next90DaysPlan"))
     next_12_18 = _list_of_strings(parsed.get("next12To18Months"))
@@ -1677,6 +1858,8 @@ def _normalize_response(parsed: dict[str, Any], answers: AnswerMap) -> dict[str,
         timeline = _fallback_application_timeline(profile)
     elif _timeline_periods_use_relative_language(timeline):
         timeline = _rewrite_timeline_periods_to_year_quarter(profile, timeline)
+    timeline = _enforce_timeline_coverage(timeline)
+    timeline = _enforce_timeline_feasibility(profile, timeline)
 
     myths: list[dict[str, str]] = []
     myths_raw = parsed.get("mythWarnings", [])
@@ -2078,6 +2261,13 @@ The candidate has paid for expert guidance. A Google search produces generic ans
 22. **License portability is conditional, not generalized.** Never write *"recognized in many states"*, *"portable across most states"*, or similar broad claims for any state license. License portability **always** depends on (a) the clinical exam completed (CDCA / WREB-legacy / ADEX), (b) the candidate's degree origin, (c) years of practice, and (d) each receiving state's reciprocity rules. Acceptable phrasing: *"License portability varies by state and depends on which clinical exam you complete, your degree origin, and years of practice. Verify with each receiving state's dental board before assuming transfer."*
 23. **Anchor every report on the core bottleneck insight.** Every analysis must explicitly surface, in plain language, the candidate's **biggest constraint vs biggest strength** — and which fix unlocks everything else. For an academically strong / financially-blocked / no-visa profile, that line is roughly: *"Biggest constraint: visa + financial execution. Biggest strength: clinical experience + INBDE. Fix the execution layer first; nothing else matters until that is unblocked."* This must appear in **at least one of**: `verdict`, `decisionNote`, `expertConclusion`. Without this, the report is **incomplete**.
 24. **"Do NOT do this" antipatterns must be visible to the candidate.** `mainRisks` (or, if not appropriate there, `pathwayRecommendation.flipConditions` / `whyNotAlternatives`) must include at least one explicit candidate-facing antipattern, e.g.: *"Do not apply to schools before confirming a viable F-1 visa pathway."*, *"Do not shortlist programs before confirming funding (cosigner, scholarship, MPOWER/Prodigy-style options) — verify per case."*, *"Do not assume INBDE pass alone makes you application-ready."* These must be specific to the candidate's profile, not generic.
+25. **Timeline feasibility must be realistic for gating steps.** If INBDE is not yet passed, do **not** present an overcompressed sequence like *"Q1 pass INBDE → Q2 apply"* as guaranteed. Use realistic phrasing: *"Q1–Q2 INBDE + document readiness; apply in the same cycle only if INBDE clears early, otherwise shift to the next viable window."* Respect processing/assembly realities (INBDE outcome reporting, ECE/WES, SOP/LOR completion, school-specific checks).
+26. **TOEFL tone must be calibrated.** Avoid overclaiming with words like *"excellent"* / *"outstanding"* unless explicitly benchmarked against current program medians. Preferred phrasing: *"TOEFL is competitive for most programs; it helps but does not by itself differentiate at top-competition schools."*
+27. **State-IDP wording must be non-absolute unless verified.** Do **not** say *"State X has no IDP"* or *"State X lacks IDP"* as a fixed fact. Use conditional phrasing: *"State X currently has limited or no widely recognized IDP options — verify via the latest ADEA CAAPID program list."*
+28. **Direct licensure wording must be conditional.** Avoid absolute *"direct state licensure is not viable/impossible."* Preferred phrasing: *"Direct licensure is generally not viable for this profile without U.S.-recognized training; rare exceptions are state-specific and must be verified with the board."*
+29. **Readiness score calibration with dual critical blockers.** When both `INBDE` is not passed **and** visa status is a study/work blocker (e.g., B1/B2/none), `readinessScore.overall` should normally remain in the lower-mid range (typically around low-to-mid 50s), not inflated to imply near execution readiness.
+30. **Every applicationTimeline must cover the full critical path checkpoints.** Across the 5–6 rows, include (bundled if needed): **DENTPIN**, **visa sequence (admission → I-20 → SEVIS/DS-160/interview)**, **ECE/WES**, **INBDE timing**, **SOP/CV/LOR preparation**, **CAAPID/PASS submission window**, **bench/interviews**, **offer/decision + relocation/matriculation prep**. Missing checkpoints = incomplete timeline.
+31. **Biggest lever must be explicit in pathway recommendation.** `decisionNote` (or `verdict`) should call out the one unlock sequence that changes trajectory, e.g., *"Biggest lever: pass INBDE + secure admission-led F-1 pathway."*
 
 ## TONE & DEPTH
 
@@ -2231,6 +2421,13 @@ async def generate_analysis_from_answers(answers: AnswerMap) -> dict[str, Any]:
                 "- License portability is conditional on exam + state rules + experience. NEVER write 'recognized in many states' or similar broad portability claims.\n"
                 "- Surface the core bottleneck insight explicitly in verdict / decisionNote / expertConclusion: biggest constraint (e.g. visa + funding) vs biggest strength (e.g. clinical + INBDE).\n"
                 "- mainRisks (or flipConditions/whyNotAlternatives) must include at least one explicit candidate-facing 'do not do this' antipattern tied to the profile.\n"
+                "- Timeline feasibility check: do not overcompress INBDE-not-passed profiles into guaranteed same-cycle submission; use conditional same-cycle language when timing is tight.\n"
+                "- TOEFL phrasing must be calibrated: 'competitive for most programs' rather than overclaiming with 'excellent/outstanding' unless benchmarked.\n"
+                "- State IDP wording must be non-absolute: avoid 'no IDP/lacks IDP' as fixed fact; use limited/verify-via-CAAPID language.\n"
+                "- Direct licensure wording must be conditional ('generally not viable for this profile') not absolute impossible claims.\n"
+                "- Readiness overall must stay calibrated when INBDE + visa are dual blockers.\n"
+                "- applicationTimeline must cover the full critical path checkpoints: DENTPIN, visa sequence, ECE/WES, INBDE, SOP/CV/LOR, CAAPID/PASS, bench/interviews, and offer/matriculation prep.\n"
+                "- Include the biggest lever explicitly in decisionNote or verdict (e.g., pass INBDE + admission-led F-1 pathway).\n"
                 "- No boilerplate phrases; institutional terminology used throughout\n\n"
                 f"Raw questionnaire answers:\n{_stringify_answers(answers)}"
             ),
