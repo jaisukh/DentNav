@@ -24,6 +24,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 ENV PATH="/app/.venv/bin:$PATH"
 ENV UV_COMPILE_BYTECODE=1
 ENV PYTHONPATH=/app
+# System users default to HOME=/nonexistent; uv needs a writable cache dir.
+ENV HOME=/app
+ENV UV_CACHE_DIR=/app/.cache/uv
 
 COPY app ./app
 COPY alembic ./alembic
@@ -32,7 +35,7 @@ COPY data ./data
 COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-RUN chown -R appuser:appgroup /app /docker-entrypoint.sh
+RUN mkdir -p /app/.cache/uv && chown -R appuser:appgroup /app /docker-entrypoint.sh
 
 USER appuser
 

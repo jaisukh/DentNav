@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { NavBar } from "@/components/landing/NavBar";
+import { NavBar } from "@/components/home/NavBar";
 import { analysisHandoffStorageKey, storeAnalysisResult } from "@/lib/analysis-session";
 import { fetchQuestionnaire } from "@/lib/api/questionnaire";
 import { submitAnalysis } from "@/lib/api/analysis";
@@ -41,37 +41,44 @@ export function QuestionnaireView() {
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  const setAnswer = useCallback((id: string, v: AnswerValue) => {
-    setAnswers((prev) => {
-      const next: Record<string, AnswerValue> = { ...prev, [id]: v };
+  const setAnswer = useCallback(
+    (id: string, v: AnswerValue) => {
+      setAnswers((prev) => {
+        const next = { ...prev, [id]: v };
 
-      if (!doc) return next;
-
-      if (id === "q1-degree-country") {
-        const country = typeof v === "string" ? v.trim() : "";
-        if (!country) {
-          delete next["q1b-degree-type"];
+        if (id === "q1-degree-country") {
+          const country = typeof v === "string" ? v.trim() : "";
+          if (!country) {
+            delete next["q1b-degree-type"];
+            return next;
+          }
+          const allowed = doc?.degreesByCountry[country];
+          const degreeType = next["q1b-degree-type"];
+          if (
+            allowed?.length &&
+            typeof degreeType === "string" &&
+            degreeType &&
+            !allowed.includes(degreeType)
+          ) {
+            next["q1b-degree-type"] = "";
+          }
           return next;
         }
-        const allowed = doc.degreesByCountry[country];
-        const degree = next["q1b-degree-type"];
-        if (typeof degree === "string" && degree && (!allowed?.length || !allowed.includes(degree))) {
-          next["q1b-degree-type"] = "";
-        }
-      }
 
-      if (id === "q1b-degree-type") {
-        const countryRaw = next["q1-degree-country"];
-        const country = typeof countryRaw === "string" ? countryRaw.trim() : "";
-        const allowed = country ? doc.degreesByCountry[country] : undefined;
-        if (typeof v === "string" && v && (!allowed?.length || !allowed.includes(v))) {
-          next["q1b-degree-type"] = "";
+        if (id === "q1b-degree-type") {
+          const countryRaw = next["q1-degree-country"];
+          const country = typeof countryRaw === "string" ? countryRaw.trim() : "";
+          const allowed = country ? doc?.degreesByCountry[country] : undefined;
+          if (allowed?.length && typeof v === "string" && v && !allowed.includes(v)) {
+            next["q1b-degree-type"] = "";
+          }
         }
-      }
 
-      return next;
-    });
-  }, [doc]);
+        return next;
+      });
+    },
+    [doc],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -93,10 +100,11 @@ export function QuestionnaireView() {
     return doc.questions.filter((q) => isAnswerComplete(q, answers[q.id], answers)).length;
   }, [doc, answers]);
   const progressPct = total > 0 ? Math.round((filled / total) * 100) : 0;
+  const formComplete = total > 0 && filled === total;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (!formComplete || submitting) return;
     setSubmitting(true);
     const handoffId = crypto.randomUUID();
     try {
@@ -185,9 +193,17 @@ export function QuestionnaireView() {
             </div>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !formComplete}
               aria-busy={submitting}
-              className="flex h-12 w-full max-w-sm cursor-pointer items-center justify-center gap-2 rounded-full border-0 bg-sky-500 text-base font-extrabold text-white shadow-[0_10px_15px_-3px_rgba(14,165,233,0.2),0_4px_6px_-4px_rgba(14,165,233,0.2)] transition-all hover:bg-sky-600 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-75"
+              aria-disabled={submitting || !formComplete}
+              title={!formComplete ? "Answer all questions to continue" : undefined}
+              className={
+                formComplete && !submitting
+                  ? "flex h-12 w-full max-w-sm cursor-pointer items-center justify-center gap-2 rounded-full border-0 bg-sky-500 text-base font-extrabold text-white shadow-[0_10px_15px_-3px_rgba(14,165,233,0.2),0_4px_6px_-4px_rgba(14,165,233,0.2)] transition-all hover:bg-sky-600 active:scale-[0.98]"
+                  : submitting
+                    ? "pointer-events-none flex h-12 w-full max-w-sm cursor-wait items-center justify-center gap-2 rounded-full border-0 bg-sky-500 text-base font-extrabold text-white opacity-90 shadow-[0_10px_15px_-3px_rgba(14,165,233,0.2),0_4px_6px_-4px_rgba(14,165,233,0.2)] transition-all"
+                    : "flex h-12 w-full max-w-sm cursor-not-allowed items-center justify-center gap-2 rounded-full border border-slate-300/40 bg-slate-50 text-base font-extrabold text-slate-400 shadow-none transition-all hover:bg-slate-50"
+              }
             >
               {submitting ? (
                 <svg

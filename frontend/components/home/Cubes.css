@@ -1,0 +1,94 @@
+/* CREDIT: Component inspired by Can Tastemel's work (lambda.ai landing) — https://cantastemel.com */
+
+:root {
+  --col-gap: 5%;
+  --row-gap: 5%;
+  --cube-perspective: 99999999px;
+  --cube-face-border: 1px solid #fff;
+  --cube-face-bg: #060010;
+  --cube-face-radius: 6px;
+}
+
+.default-animation {
+  position: relative;
+  width: 50%;
+  aspect-ratio: var(--cubes-aspect, 1 / 1);
+  height: auto;
+}
+
+.default-animation.cubes--hero {
+  /* Sized for readable cubes; centers via parent flex + margin auto */
+  width: min(340px, 78vw);
+  max-width: 100%;
+  height: auto;
+  max-height: min(520px, 68vh);
+  margin-inline: auto;
+  aspect-ratio: var(--cubes-aspect, 1 / 1);
+}
+
+.default-animation--scene {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  column-gap: var(--col-gap);
+  row-gap: var(--row-gap);
+  perspective: var(--cube-perspective);
+  grid-auto-rows: 1fr;
+}
+
+.cube {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  transform-style: preserve-3d;
+}
+
+.cube::before {
+  content: "";
+  position: absolute;
+  top: -36px;
+  right: -36px;
+  bottom: -36px;
+  left: -36px;
+}
+
+.default-animation .cube-face {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cube-face-bg);
+  border: var(--cube-face-border);
+  border-radius: var(--cube-face-radius);
+  opacity: 1;
+}
+
+.default-animation .cube-face--top {
+  transform: translateY(-50%) rotateX(90deg);
+}
+
+.default-animation .cube-face--bottom {
+  transform: translateY(50%) rotateX(-90deg);
+}
+
+.default-animation .cube-face--left {
+  transform: translateX(-50%) rotateY(-90deg);
+}
+
+.default-animation .cube-face--right {
+  transform: translateX(50%) rotateY(90deg);
+}
+
+.default-animation .cube-face--back,
+.default-animation .cube-face--front {
+  transform: rotateY(-90deg) translateX(50%) rotateY(90deg);
+}
+
+@media (max-width: 768px) {
+  .default-animation:not(.cubes--hero) {
+    width: 90%;
+  }
+}

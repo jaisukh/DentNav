@@ -47,6 +47,29 @@ html {
   @apply mx-auto w-full max-w-[1536px] px-6 sm:px-8 lg:px-12;
 }
 
+/* Heading gradient shimmer */
+@keyframes text-shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+.text-shimmer {
+  background: linear-gradient(90deg, #0c1a3a 25%, #0ea5e9 50%, #0c1a3a 75%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: text-shimmer 4s linear infinite;
+}
+/* Softer shimmer for body-sized text — slate base, sky highlight */
+.text-shimmer-soft {
+  background: linear-gradient(90deg, #475569 30%, #38bdf8 50%, #475569 70%);
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: text-shimmer 5s linear infinite;
+}
+
 @keyframes marquee-ltr {
   from {
     transform: translateX(-50%);

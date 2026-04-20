@@ -236,33 +236,6 @@ export default function LineWaves({
     canvas.style.height = "100%";
     canvas.style.display = "block";
 
-    const p = propsRef.current;
-    const rotationRad = (p.rotation * Math.PI) / 180;
-
-    const program = new Program(gl, {
-      vertex: vertexShader,
-      fragment: fragmentShader,
-      uniforms: {
-        uTime: { value: 0 },
-        uResolution: {
-          value: [1, 1, 1],
-        },
-        uSpeed: { value: p.speed },
-        uInnerLines: { value: p.innerLineCount },
-        uOuterLines: { value: p.outerLineCount },
-        uWarpIntensity: { value: p.warpIntensity },
-        uRotation: { value: rotationRad },
-        uEdgeFadeWidth: { value: p.edgeFadeWidth },
-        uColorCycleSpeed: { value: p.colorCycleSpeed },
-        uBrightness: { value: p.brightness },
-        uColor1: { value: hexToVec3(p.color1) },
-        uColor2: { value: hexToVec3(p.color2) },
-        uColor3: { value: hexToVec3(p.color3) },
-        uMouse: { value: new Float32Array([0.5, 0.5]) },
-        uMouseInfluence: { value: p.mouseInfluence },
-        uEnableMouse: { value: p.enableMouseInteraction ? 1 : 0 },
-      },
-    });
     const currentMouse = [0.5, 0.5];
     const targetMouse = [0.5, 0.5];
 
@@ -317,6 +290,33 @@ export default function LineWaves({
     window.addEventListener("resize", resize);
 
     const geometry = new Triangle(gl);
+    const p = propsRef.current;
+    const rotationRad = (p.rotation * Math.PI) / 180;
+
+    const program = new Program(gl, {
+      vertex: vertexShader,
+      fragment: fragmentShader,
+      uniforms: {
+        uTime: { value: 0 },
+        uResolution: {
+          value: [1, 1, 1],
+        },
+        uSpeed: { value: p.speed },
+        uInnerLines: { value: p.innerLineCount },
+        uOuterLines: { value: p.outerLineCount },
+        uWarpIntensity: { value: p.warpIntensity },
+        uRotation: { value: rotationRad },
+        uEdgeFadeWidth: { value: p.edgeFadeWidth },
+        uColorCycleSpeed: { value: p.colorCycleSpeed },
+        uBrightness: { value: p.brightness },
+        uColor1: { value: hexToVec3(p.color1) },
+        uColor2: { value: hexToVec3(p.color2) },
+        uColor3: { value: hexToVec3(p.color3) },
+        uMouse: { value: new Float32Array([0.5, 0.5]) },
+        uMouseInfluence: { value: p.mouseInfluence },
+        uEnableMouse: { value: p.enableMouseInteraction ? 1 : 0 },
+      },
+    });
 
     const mesh = new Mesh(gl, { geometry, program });
     root.appendChild(canvas);

@@ -1,8 +1,8 @@
-import { BentoSection } from "@/components/landing/BentoSection";
-import { CtaSection } from "@/components/landing/CtaSection";
-import { Footer } from "@/components/landing/Footer";
-import { HeroSection } from "@/components/landing/HeroSection";
-import { NavBar } from "@/components/landing/NavBar";
+import { BentoSection } from "@/components/home/BentoSection";
+import { CtaSection } from "@/components/home/CtaSection";
+import { Footer } from "@/components/home/Footer";
+import { HeroSection } from "@/components/home/HeroSection";
+import { NavBar } from "@/components/home/NavBar";
 
 export default function Home() {
   return (

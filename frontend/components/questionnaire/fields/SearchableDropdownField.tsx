@@ -44,10 +44,12 @@ export function SearchableDropdownField({ question, value, onChange, options }: 
           aria-expanded={open}
           className="relative box-border flex h-9 w-full items-center rounded-full border border-slate-300/40 bg-white px-4 pr-10 text-left font-sans text-xs text-[#0C1A3A] focus:border-sky-500 focus:outline-none"
           onClick={() =>
-            setOpen((o) => {
-              const next = !o;
-              if (next) setQuery("");
-              return next;
+            setOpen((wasOpen) => {
+              const nextOpen = !wasOpen;
+              if (nextOpen) {
+                setQuery("");
+              }
+              return nextOpen;
             })
           }
         >

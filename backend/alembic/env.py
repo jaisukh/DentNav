@@ -5,6 +5,7 @@ from pathlib import Path
 from alembic import context
 from app.db.base import Base
 from app.models.user import User  # noqa: F401
+from app.models.analysis import Analysis  # noqa: F401
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
