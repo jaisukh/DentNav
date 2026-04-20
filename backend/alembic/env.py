@@ -1,11 +1,17 @@
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
-
 from app.db.base import Base
 from app.models.user import User  # noqa: F401
+from dotenv import load_dotenv
+from sqlalchemy import engine_from_config, pool
+
+# Load .env for local CLI use (no-op when DATABASE_URL is already in the environment,
+# e.g. inside Docker / Railway where the platform injects the variable directly).
+_env_file = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(_env_file, override=False)
 
 config = context.config
 

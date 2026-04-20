@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     google_redirect_uri: str = ""
 
     openai_api_key: str = ""
-    openai_model: str = "gpt-4o"
+    openai_model: str = "gpt-4.1"
 
     @field_validator("cors_origin_regex", mode="before")
     @classmethod

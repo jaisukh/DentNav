@@ -149,11 +149,11 @@
   },
   "applicationTimeline": [
     {"period": "Now", "periodColor": "red", "milestone": "DENTPIN creation + visa strategy", "detail": "Create DENTPIN. Begin F-1 / master's research immediately — this is the critical path."},
-    {"period": "2025–26", "periodColor": "amber", "milestone": "Enrol in U.S. master's program", "detail": "Secure F-1 visa. Start ECE credential evaluation. Build observerships and U.S. network."},
-    {"period": "2026", "periodColor": "amber", "milestone": "U.S. exposure + profile build", "detail": "Complete observerships, community work, and any research. Strengthen SOP narrative."},
-    {"period": "Early 2027", "periodColor": "purple", "milestone": "SOP, CV & letters of recommendation", "detail": "Draft personal statement. Request LORs from U.S. contacts at least 6 months before portal opens."},
-    {"period": "Mid 2027", "periodColor": "purple", "milestone": "ADEA CAAPID application opens", "detail": "Submit DDS/DMD applications. Also consider ADEA PASS for GPR/AEGD if applicable."},
-    {"period": "Late 2027", "periodColor": "teal", "milestone": "Bench tests + interviews", "detail": "Program-specific practical assessments and interviews. DentNav mock interview prep recommended."}
+    {"period": "Q1–Q2 2026", "periodColor": "amber", "milestone": "Enrol in U.S. master's program", "detail": "Secure F-1 visa. Start ECE credential evaluation. Build observerships and U.S. network."},
+    {"period": "Q3–Q4 2026", "periodColor": "amber", "milestone": "U.S. exposure + profile build", "detail": "Complete observerships, community work, and any research. Strengthen SOP narrative."},
+    {"period": "Q1 2027", "periodColor": "purple", "milestone": "SOP, CV & letters of recommendation", "detail": "Draft personal statement. Request LORs from U.S. contacts well before the CAAPID season."},
+    {"period": "Q2–Q3 2027", "periodColor": "purple", "milestone": "ADEA CAAPID application season", "detail": "Submit DDS/DMD applications. Also consider ADEA PASS for GPR/AEGD if applicable."},
+    {"period": "Q4 2027–Q1 2028", "periodColor": "teal", "milestone": "Bench tests + interviews", "detail": "Program-specific practical assessments and interviews. DentNav mock interview prep recommended."}
   ],
   "mythWarnings": [
     {
@@ -172,9 +172,54 @@
   "statePlanning": {
     "note": "State licensure is state-specific and must be verified with boards. Alabama, Arizona, and Arkansas have varying requirements.",
     "states": [
-      {"name": "Alabama", "notes": "State-specific board requirements. Verify ADEX or regional clinical exam acceptance with Alabama Dental Board.", "competitiveness": "Moderate"},
-      {"name": "Arizona", "notes": "Accepts WREB/ADEX in most pathways. Active dental market. Verify current rules with Arizona State Board.", "competitiveness": "Moderate-High"},
-      {"name": "Arkansas", "notes": "Less competitive market. Distinct board requirements. May suit candidates open to less saturated locations.", "competitiveness": "Low-Moderate"}
+      {
+        "name": "Alabama",
+        "notes": "State-specific board requirements and documentation sequencing matter. Verify accepted exam pathway and exact board submission standards before finalizing application spend.",
+        "competitiveness": "Moderate",
+        "licenseRoute": "DDS/DMD-led licensure planning with board-verified documentation and exam compliance checks.",
+        "examExpectation": "Confirm current ADEX/regional exam acceptance and administrative prerequisites directly with board sources.",
+        "visaSponsorshipReality": "Employment pathways can be viable but remain employer- and role-dependent; do not assume automatic sponsorship.",
+        "timelineHint": "Begin board-level verification at least 12 months before the target cycle.",
+        "priorityActions": [
+          "Validate licensure checklist with official Alabama board resources.",
+          "Align exam plan with your target cycle and interview timeline."
+        ],
+        "riskFlags": [
+          "Relying on forum-based requirements can introduce compliance gaps."
+        ]
+      },
+      {
+        "name": "Arizona",
+        "notes": "Arizona can be opportunity-rich, but pathway success still depends on exact board compliance and profile strength. Validate current board rules rather than assuming historical acceptance patterns still apply.",
+        "competitiveness": "Moderate-High",
+        "licenseRoute": "DDS/DMD-focused path with board-specific review of eligibility and documentation standards.",
+        "examExpectation": "Confirm accepted clinical pathway and any state-specific compliance steps before application submission.",
+        "visaSponsorshipReality": "Market activity is favorable in segments, but visa transitions still require intentional employer targeting.",
+        "timelineHint": "Run licensure planning in parallel with CAAPID/PASS readiness work.",
+        "priorityActions": [
+          "Shortlist programs/employers that align with visa and licensure constraints.",
+          "Track board updates quarterly through official channels."
+        ],
+        "riskFlags": [
+          "Assuming portability from another state can delay licensing execution."
+        ]
+      },
+      {
+        "name": "Arkansas",
+        "notes": "Potentially less saturated than larger coastal markets, but board-specific rules still govern feasibility. Confirm exact eligibility criteria and test pathway requirements directly from board publications.",
+        "competitiveness": "Moderate",
+        "licenseRoute": "Board-dependent route where early verification can create a cleaner, lower-friction timeline.",
+        "examExpectation": "Validate accepted exam pathway, documentation sequence, and any state-specific constraints.",
+        "visaSponsorshipReality": "Lower saturation may help in select settings, but sponsorship remains case-by-case and not guaranteed.",
+        "timelineHint": "Use an early board checklist to de-risk late-stage surprises.",
+        "priorityActions": [
+          "Build a board-first eligibility checklist before program applications.",
+          "Pair licensure planning with funding and visa strategy."
+        ],
+        "riskFlags": [
+          "Underestimating state-level paperwork lead times can shift start dates."
+        ]
+      }
     ]
   },
   "statePlanningNote": "State licensure is state-specific and must be verified with boards. Alabama, Arizona, and Arkansas have varying requirements.",
