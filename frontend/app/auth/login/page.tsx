@@ -97,7 +97,7 @@ export default function LoginPage() {
                             </div>
                         </div>
                         <p className="mt-3 line-clamp-4 text-[12px] font-medium leading-[1.45] text-white/90 lg:mt-3.5 lg:text-[13px] lg:leading-[1.5]">
-                            We know how overwhelming this journey can feel beacuse we&apos;ve lived it ourselves.
+                            We know how overwhelming this journey can feel beacuse we've lived it ourselves.
                             Today, through DentNav, our goal is simple: To make your journey clearer, smoother, and more achievable.
                             Remember,{" "}
                             <span className="font-bold">

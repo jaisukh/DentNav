@@ -1,41 +1,13 @@
-FROM node:20-alpine AS deps
+FROM node:20-alpine
 
 WORKDIR /app
+
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# ── build stage ────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
-
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# NEXT_PUBLIC_BACKEND_URL must be set at build time for static pages
-ARG NEXT_PUBLIC_BACKEND_URL
-ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
-
-RUN npm run build
-
-# ── runtime stage ──────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
-
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-# Non-root user — set ownership on COPY to avoid `chown -R` (slower; can hit BuildKit I/O errors on some hosts).
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
-
-COPY --chown=appuser:appgroup --from=builder /app/public ./public
-COPY --chown=appuser:appgroup --from=builder /app/.next/standalone ./
-COPY --chown=appuser:appgroup --from=builder /app/.next/static ./.next/static
-
-USER appuser
-
+ENV NEXT_TELEMETRY_DISABLED=1
 EXPOSE 3000
 
-ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
-
-CMD ["node", "server.js"]
+CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3000"]

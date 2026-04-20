@@ -1,8 +1,10 @@
-const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-
-/** Frontend -> FastAPI backend endpoints. */
+/**
+ * Same-origin Next.js Route Handlers under `app/api/*`.
+ * All API logic for this app lives in the frontend repo.
+ */
 export const API_ROUTES = {
-  questionnaire: `${BACKEND_BASE_URL}/api/v1/questionnaire`,
-  analysis: `${BACKEND_BASE_URL}/api/v1/analysis`,
-  googleLogin: `${BACKEND_BASE_URL}/api/v1/auth/google/login`,
+  questionnaire: "/api/questionnaire",
+  analysis: "/api/analysis",
+  /** Starts Google OAuth (GET redirects to Google). */
+  googleLogin: "/api/auth/google/login",
 } as const;

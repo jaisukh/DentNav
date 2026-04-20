@@ -11,22 +11,7 @@ import { fetchAnalysis } from "@/lib/api/analysis";
 import type { AnalysisResultPayload } from "@/lib/analysis.types";
 
 export default function AnalysisPage() {
-  const [data, setData] = useState<AnalysisResultPayload | null>(() => {
-    if (typeof window === "undefined") return null;
-    const params = new URLSearchParams(window.location.search);
-    const handoffId = params.get("h");
-    if (handoffId) {
-      const raw = sessionStorage.getItem(analysisHandoffStorageKey(handoffId));
-      if (raw) {
-        try {
-          return JSON.parse(raw) as AnalysisResultPayload;
-        } catch {
-          /* fall through to legacy / GET */
-        }
-      }
-    }
-    return peekAnalysisResultFromSession();
-  });
+  const [data, setData] = useState<AnalysisResultPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,12 +19,34 @@ export default function AnalysisPage() {
 
     const params = new URLSearchParams(window.location.search);
     const handoffId = params.get("h");
-    if (data) {
+    if (handoffId) {
+      const raw = sessionStorage.getItem(analysisHandoffStorageKey(handoffId));
+      if (raw) {
+        try {
+          const payload = JSON.parse(raw) as AnalysisResultPayload;
+          setData(payload);
+          queueMicrotask(() => {
+            if (cancelled) return;
+            sessionStorage.removeItem(analysisHandoffStorageKey(handoffId));
+            clearAnalysisResultFromSession();
+            if (window.location.pathname === "/analysis" && window.location.search.includes("h=")) {
+              window.history.replaceState(null, "", "/analysis");
+            }
+          });
+          return () => {
+            cancelled = true;
+          };
+        } catch {
+          /* fall through to legacy / GET */
+        }
+      }
+    }
+
+    const fromQuestionnaire = peekAnalysisResultFromSession();
+    if (fromQuestionnaire) {
+      setData(fromQuestionnaire);
       queueMicrotask(() => {
         if (!cancelled) {
-          if (handoffId) {
-            sessionStorage.removeItem(analysisHandoffStorageKey(handoffId));
-          }
           clearAnalysisResultFromSession();
           if (window.location.pathname === "/analysis" && window.location.search.includes("h=")) {
             window.history.replaceState(null, "", "/analysis");
@@ -61,7 +68,7 @@ export default function AnalysisPage() {
     return () => {
       cancelled = true;
     };
-  }, [data]);
+  }, []);
 
   if (error) {
     return (

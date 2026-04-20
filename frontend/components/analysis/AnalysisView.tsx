@@ -1,6 +1,6 @@
 import type { AnalysisResultPayload } from "@/lib/analysis.types";
-import { Footer } from "@/components/landing/Footer";
-import { NavBar } from "@/components/landing/NavBar";
+import { Footer } from "@/components/home/Footer";
+import { NavBar } from "@/components/home/NavBar";
 import { AnalysisResultsCard } from "./AnalysisResultsCard";
 import { AnalysisTopStrip } from "./AnalysisTopStrip";
 import { BlurredRoadmapSection } from "./BlurredRoadmapSection";

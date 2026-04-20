@@ -5,7 +5,7 @@ export type AnalysisRequestBody = {
   answers?: Record<string, unknown>;
 };
 
-/** GET — mock analysis payload (no backend). */
+/** GET — mock analysis payload from Route Handler. */
 export async function fetchAnalysis(): Promise<AnalysisResultPayload> {
   const res = await fetch(API_ROUTES.analysis, { cache: "no-store" });
   if (!res.ok) throw new Error(`Analysis request failed: ${res.status}`);

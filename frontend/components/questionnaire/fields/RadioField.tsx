@@ -1,7 +1,6 @@
 "use client";
 
 import type { RadioQuestion } from "@/lib/questionnaire.types";
-import { QuestionBlock } from "../QuestionBlock";
 
 type Props = {
   question: RadioQuestion;
@@ -20,58 +19,65 @@ export function RadioField({ question, value, onChange }: Props) {
     opts.some((o) => o.toLowerCase() === "yes") &&
     opts.some((o) => o.toLowerCase() === "no");
 
-  if (isBinary) {
-    const num = String(question.order).padStart(2, "0");
-
-    return (
-      <div className="box-border flex w-full flex-col gap-3 rounded-[36px] border border-sky-500/10 bg-sky-50/40 p-3">
-        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-1 items-start gap-2">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[10px] font-bold text-sky-500">
-              {num}
-            </div>
-            <span className="min-w-0 flex-1 text-left text-[13px] font-bold leading-snug text-[#0C1A3A]">
-              {question.label}
-            </span>
-          </div>
-          <div className="box-border flex h-[38px] w-[140px] shrink-0 self-end rounded-full border border-slate-200/80 bg-white p-1 sm:self-center">
-            {opts.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                className={`flex flex-1 items-center justify-center rounded-full border-0 text-[11px] font-medium transition-colors ${
-                  value === opt
-                    ? "bg-sky-500 font-bold text-white"
-                    : "bg-transparent text-slate-400 hover:text-slate-600"
-                }`}
-                onClick={() => onChange(opt)}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-        </div>
-        {question.description ? (
-          <p className="text-[11px] font-medium leading-relaxed text-slate-500">{question.description}</p>
-        ) : null}
-      </div>
-    );
-  }
+  const num = String(question.order).padStart(2, "0");
 
   return (
-    <QuestionBlock order={question.order} label={question.label} description={question.description}>
-      <div className="flex w-full flex-wrap gap-2">
-        {opts.map((opt) => (
-          <button
-            key={opt}
-            type="button"
-            className={`${pillBase} ${value === opt ? pillActive : ""}`}
-            onClick={() => onChange(opt)}
-          >
-            {opt}
-          </button>
-        ))}
+    <div className="flex w-full flex-col items-start gap-2">
+      <div className="flex w-full min-h-6 items-center gap-2">
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[10px] font-bold text-sky-500">
+          {num}
+        </div>
+        <span className="text-[13px] font-bold leading-snug text-[#0C1A3A]">
+          {question.label}
+        </span>
       </div>
-    </QuestionBlock>
+
+      {question.description ? (
+        <p className="mb-1 w-full text-[11px] font-medium leading-relaxed text-slate-500">
+          {question.description}
+        </p>
+      ) : null}
+
+      {isBinary ? (
+        <div className="flex w-full justify-center gap-8">
+          {opts.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(opt)}
+              className="flex items-center gap-2.5"
+            >
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+                  value === opt
+                    ? "border-sky-500 bg-sky-500"
+                    : "border-slate-300 bg-white hover:border-sky-400"
+                }`}
+              >
+                {value === opt && (
+                  <span className="h-2 w-2 rounded-full bg-white" />
+                )}
+              </span>
+              <span className={`text-[13px] font-semibold transition-colors ${value === opt ? "text-sky-500" : "text-slate-500"}`}>
+                {opt}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="flex w-full flex-wrap gap-2">
+          {opts.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              className={`${pillBase} ${value === opt ? pillActive : ""}`}
+              onClick={() => onChange(opt)}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

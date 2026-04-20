@@ -1,6 +1,7 @@
-import { API_ROUTES } from "./routes";
-
-/** OAuth entrypoint URL on backend; browser must navigate to it. */
+/**
+ * Sign-in entry. Currently sends users straight to the signed-in shell.
+ * When wiring real Google OAuth, switch this to `API_ROUTES.googleLogin`.
+ */
 export function getGoogleSignInUrl(): string {
-  return API_ROUTES.googleLogin;
+  return "/landing";
 }
