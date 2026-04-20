@@ -185,7 +185,23 @@ export default function LineWaves({
     enableMouseInteraction,
     mouseInfluence,
   });
-  propsRef.current = {
+  useEffect(() => {
+    propsRef.current = {
+      speed,
+      innerLineCount,
+      outerLineCount,
+      warpIntensity,
+      rotation,
+      edgeFadeWidth,
+      colorCycleSpeed,
+      brightness,
+      color1,
+      color2,
+      color3,
+      enableMouseInteraction,
+      mouseInfluence,
+    };
+  }, [
     speed,
     innerLineCount,
     outerLineCount,
@@ -199,7 +215,7 @@ export default function LineWaves({
     color3,
     enableMouseInteraction,
     mouseInfluence,
-  };
+  ]);
 
   useEffect(() => {
     const root = containerRef.current;
@@ -220,7 +236,6 @@ export default function LineWaves({
     canvas.style.height = "100%";
     canvas.style.display = "block";
 
-    let program!: Program;
     const currentMouse = [0.5, 0.5];
     const targetMouse = [0.5, 0.5];
 
@@ -278,7 +293,7 @@ export default function LineWaves({
     const p = propsRef.current;
     const rotationRad = (p.rotation * Math.PI) / 180;
 
-    program = new Program(gl, {
+    const program = new Program(gl, {
       vertex: vertexShader,
       fragment: fragmentShader,
       uniforms: {

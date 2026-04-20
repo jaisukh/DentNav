@@ -2,7 +2,6 @@
 
 import { signOut } from "@/lib/api/auth";
 import { BrandLogo } from "@/components/home/BrandLogo";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export function LandingHeader() {

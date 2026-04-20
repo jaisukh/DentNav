@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 /**
  * Single-line footer for /landing — keeps the fixed sidebar clearance small and avoids overlap on scroll.
  */

@@ -149,7 +149,7 @@ export function BentoSection() {
             </div>
 
             <p className="mt-4 text-xs font-semibold leading-relaxed text-dent-ink/80 italic">
-              We've built a step-by-step, hand-holding process to take you from foreign-trained to US-trained Dentist.
+              We&apos;ve built a step-by-step, hand-holding process to take you from foreign-trained to US-trained Dentist.
             </p>
           </article>
 

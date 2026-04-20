@@ -23,9 +23,9 @@ export default function AnalysisPage() {
       if (raw) {
         try {
           const payload = JSON.parse(raw) as AnalysisPreviewPayload;
-          setData(payload);
           queueMicrotask(() => {
             if (cancelled) return;
+            setData(payload);
             sessionStorage.removeItem(analysisHandoffStorageKey(handoffId));
             clearAnalysisResultFromSession();
             if (window.location.pathname === "/analysis" && window.location.search.includes("h=")) {
@@ -43,9 +43,9 @@ export default function AnalysisPage() {
 
     const fromQuestionnaire = peekAnalysisResultFromSession();
     if (fromQuestionnaire) {
-      setData(fromQuestionnaire);
       queueMicrotask(() => {
         if (!cancelled) {
+          setData(fromQuestionnaire);
           clearAnalysisResultFromSession();
           if (window.location.pathname === "/analysis" && window.location.search.includes("h=")) {
             window.history.replaceState(null, "", "/analysis");
@@ -57,7 +57,11 @@ export default function AnalysisPage() {
       };
     }
 
-    setError("No analysis to display. Please complete the questionnaire.");
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setError("No analysis to display. Please complete the questionnaire.");
+      }
+    });
     return () => {
       cancelled = true;
     };
