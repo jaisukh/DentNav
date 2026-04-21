@@ -28,6 +28,13 @@ _UUID_RE = re.compile(
 )
 
 
+def _session_cookie_kwargs() -> tuple[bool, str]:
+    """HTTPS: SameSite=None+Secure so credentialed cross-origin fetch from the SPA works."""
+    secure = settings.frontend_base_url.startswith("https://")
+    samesite: str = "none" if secure else "lax"
+    return secure, samesite
+
+
 def _sanitize_analysis_id(value: str | None) -> str | None:
     if value and _UUID_RE.match(value):
         return value
@@ -74,23 +81,25 @@ async def google_callback(
     # Always land on the dedicated post-sign-in page. How/when to surface the
     # claimed analysis row is a separate product decision (gated by payment).
     response = RedirectResponse(url=f"{settings.frontend_base_url}/landing")
+    secure, samesite = _session_cookie_kwargs()
     response.set_cookie(
         key="dentnav_user_id",
         value=user_id,
         max_age=60 * 60 * 24 * 30,
         httponly=True,
-        samesite="lax",
-        secure=settings.frontend_base_url.startswith("https://"),
+        samesite=samesite,
+        secure=secure,
     )
     return response
 
 
 @router.post("/logout")
 async def google_logout(response: Response) -> dict[str, bool]:
+    secure, samesite = _session_cookie_kwargs()
     response.delete_cookie(
         key="dentnav_user_id",
         httponly=True,
-        samesite="lax",
-        secure=settings.frontend_base_url.startswith("https://"),
+        samesite=samesite,
+        secure=secure,
     )
     return {"ok": True}
