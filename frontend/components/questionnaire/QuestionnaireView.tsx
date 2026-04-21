@@ -40,6 +40,7 @@ export function QuestionnaireView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const setAnswer = useCallback(
     (id: string, v: AnswerValue) => {
@@ -105,6 +106,7 @@ export function QuestionnaireView() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formComplete || submitting) return;
+    setSubmitError(null);
     setSubmitting(true);
     const handoffId = crypto.randomUUID();
     try {
@@ -112,13 +114,16 @@ export function QuestionnaireView() {
       try {
         sessionStorage.setItem(analysisHandoffStorageKey(handoffId), JSON.stringify(payload));
       } catch {
-        /* quota — legacy key still attempted below */
+        /* quota — SESSION_KEY in storeAnalysisResult may still succeed */
       }
       storeAnalysisResult(payload);
-    } catch {
-      /* navigate without session handoff; analysis page will GET */
+      router.push(`/analysis?h=${encodeURIComponent(handoffId)}`);
+    } catch (err) {
+      setSubmitting(false);
+      const message =
+        err instanceof Error ? err.message : "Could not generate your analysis. Please try again.";
+      setSubmitError(message);
     }
-    router.push(`/analysis?h=${encodeURIComponent(handoffId)}`);
   };
 
   if (loadError) {
@@ -179,6 +184,14 @@ export function QuestionnaireView() {
           ))}
 
           <div className="flex w-full flex-col items-center gap-4 border-t border-slate-50 pt-4">
+            {submitError ? (
+              <p
+                role="alert"
+                className="w-full max-w-sm rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-800"
+              >
+                {submitError}
+              </p>
+            ) : null}
             <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path

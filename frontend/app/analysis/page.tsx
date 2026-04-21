@@ -59,7 +59,11 @@ export default function AnalysisPage() {
 
     queueMicrotask(() => {
       if (!cancelled) {
-        setError("No analysis to display. Please complete the questionnaire.");
+        setError(
+          handoffId
+            ? "We couldn't load your results. The server request may have failed, or storage was unavailable. Please return to the questionnaire and try again."
+            : "No analysis to display. Please complete the questionnaire.",
+        );
       }
     });
     return () => {

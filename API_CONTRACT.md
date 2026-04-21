@@ -40,7 +40,7 @@
 
 ### `GET /api/v1/auth/google/callback`
 
-- **Behavior:** exchange OAuth `code`, fetch user email, upsert user (`email`, `token`) in Postgres, then redirect to `/home` on `FRONTEND_BASE_URL`.
+- **Behavior:** exchange OAuth `code`, fetch user email, upsert user (`email`, `token`) in Postgres, set session cookie, then redirect to `/landing` on `FRONTEND_BASE_URL`.
 
 ## Database model
 
