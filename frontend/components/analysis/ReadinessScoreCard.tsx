@@ -33,23 +33,23 @@ function ratingTone(dim: ReadinessDimension): RatingTone {
 
 const TONE_BAR: Record<RatingTone, string> = {
   strong: "bg-emerald-500",
-  good: "bg-emerald-400",
-  warn: "bg-amber-400",
+  good: "bg-emerald-500/85",
+  warn: "bg-amber-500",
   gap: "bg-rose-500",
 };
 
 const TONE_LABEL: Record<RatingTone, string> = {
-  strong: "text-emerald-400",
-  good: "text-emerald-300",
-  warn: "text-amber-300",
-  gap: "text-rose-400",
+  strong: "text-emerald-700",
+  good: "text-emerald-700/90",
+  warn: "text-amber-700",
+  gap: "text-rose-700",
 };
 
 const STRENGTH_PILL =
-  "rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-400/30";
+  "rounded-full bg-emerald-500/12 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-600/20";
 
 const GAP_PILL =
-  "rounded-full bg-rose-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-rose-300 ring-1 ring-rose-400/30";
+  "rounded-full bg-rose-500/12 px-2.5 py-0.5 text-[11px] font-semibold text-rose-800 ring-1 ring-rose-600/20";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -60,21 +60,21 @@ function HeadlineBar({ score, label }: { score: number; label: string }) {
   return (
     <div className="flex w-full items-center gap-5">
       <div className="flex shrink-0 flex-col items-start">
-        <span className="font-display text-[44px] font-extrabold leading-none tracking-[-1.6px] text-white sm:text-[52px]">
+        <span className="font-display text-[44px] font-extrabold leading-none tracking-[-1.6px] text-[#0C1A3A] sm:text-[52px]">
           {Math.round(pct)}
         </span>
-        <span className="mt-1 text-[10px] font-medium uppercase tracking-[1.3px] text-slate-400">
+        <span className="mt-1 text-[10px] font-medium uppercase tracking-[1.3px] text-slate-500">
           out of 100
         </span>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-700/60">
+        <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/80">
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-emerald-500 transition-[width] duration-300 ease-out"
+            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 transition-[width] duration-300 ease-out"
             style={{ width: `${pct}%` }}
           />
         </div>
-        <p className="text-sm font-medium leading-5 text-slate-200">
+        <p className="text-sm font-medium leading-5 text-[#3E4850]">
           {label || FALLBACK_HEADLINE}
         </p>
       </div>
@@ -87,8 +87,8 @@ function DimensionRow({ dim }: { dim: ReadinessDimension }) {
   const pct = clamp(dim.score, 0, 100);
   return (
     <li className="grid grid-cols-[minmax(0,150px)_minmax(0,1fr)_auto] items-center gap-3 sm:gap-5">
-      <span className="truncate text-[13px] font-medium text-slate-200">{dim.name}</span>
-      <div className="relative h-1.5 min-w-0 overflow-hidden rounded-full bg-slate-700/60">
+      <span className="truncate text-[13px] font-medium text-[#0C1A3A]/85">{dim.name}</span>
+      <div className="relative h-1.5 min-w-0 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/80">
         <div
           className={`absolute inset-y-0 left-0 rounded-full ${TONE_BAR[tone]}`}
           style={{ width: `${pct}%` }}
@@ -105,9 +105,9 @@ export function ReadinessScoreCard({ data }: ReadinessScoreCardProps) {
   const gaps = (data.gaps ?? []).filter((g) => g && g.trim().length);
 
   return (
-    <section className="relative z-[1] mx-auto w-full max-w-[1136px] rounded-[24px] bg-slate-900 p-5 text-slate-100 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.45)] sm:p-7">
+    <section className="relative z-[1] mx-auto w-full rounded-[32px] border border-sky-500/10 bg-white/[0.98] p-5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] backdrop-blur-xl sm:p-7">
       <header className="mb-4 flex items-center justify-between gap-4">
-        <p className="text-[11px] font-bold uppercase tracking-[2px] text-slate-400">
+        <p className="text-[11px] font-bold uppercase tracking-[2px] text-slate-500">
           Readiness Score — {dims.length || 6} Dimensions
         </p>
       </header>
@@ -121,7 +121,7 @@ export function ReadinessScoreCard({ data }: ReadinessScoreCardProps) {
           ))}
         </ul>
       ) : (
-        <p className="mt-6 text-sm text-slate-400">
+        <p className="mt-6 text-sm text-slate-500">
           Per-dimension breakdown will appear here.
         </p>
       )}
@@ -130,7 +130,7 @@ export function ReadinessScoreCard({ data }: ReadinessScoreCardProps) {
         <div className="mt-6 grid gap-5 sm:grid-cols-2">
           {strengths.length > 0 ? (
             <div>
-              <h3 className="text-[13px] font-semibold text-slate-200">Strengths</h3>
+              <h3 className="text-[13px] font-semibold text-[#0C1A3A]">Strengths</h3>
               <ul className="mt-2 flex flex-wrap gap-1.5">
                 {strengths.map((s, i) => (
                   <li key={`${s}-${i}`} className={STRENGTH_PILL}>
@@ -142,7 +142,7 @@ export function ReadinessScoreCard({ data }: ReadinessScoreCardProps) {
           ) : null}
           {gaps.length > 0 ? (
             <div>
-              <h3 className="text-[13px] font-semibold text-slate-200">Gaps to close</h3>
+              <h3 className="text-[13px] font-semibold text-[#0C1A3A]">Gaps to close</h3>
               <ul className="mt-2 flex flex-wrap gap-1.5">
                 {gaps.map((g, i) => (
                   <li key={`${g}-${i}`} className={GAP_PILL}>

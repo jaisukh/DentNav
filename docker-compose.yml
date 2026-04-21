@@ -21,22 +21,16 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: dentnav-backend
+    # Load repo-root `.env` into the container. Do not pass secrets as
+    # `KEY: ${KEY:-}` here — an empty host substitution overrides env_file.
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/dentnav
+      # Overrides .env (often has localhost:15432 for host Postgres).
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/dentnav
       PYTHONPATH: /app
       BACKEND_CORS_ORIGINS: http://localhost:3000
       FRONTEND_BASE_URL: http://localhost:3000
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
-      AWS_S3_QUESTIONNAIRE_KEY: ${AWS_S3_QUESTIONNAIRE_KEY:-}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
     depends_on:
       postgres:
         condition: service_healthy
