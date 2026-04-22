@@ -65,7 +65,7 @@ export function BentoSection() {
             </div>
           </article>
 
-          {/* Cell B — We've Been in Your Shoes */}
+          {/* Cell B — We&apos;ve Been in Your Shoes */}
           <article className="flex min-h-[312px] flex-col rounded-3xl border border-[rgba(14,165,233,0.1)] bg-dent-badge-bg px-8 pb-8 pt-8">
             <IconTile className="bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]" size="md">
               <svg className="h-5 w-5 text-dent-deep" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -102,7 +102,7 @@ export function BentoSection() {
             </div>
 
             <p className="mt-4 text-xs font-semibold leading-relaxed text-dent-ink/80 italic">
-              We've built a step-by-step, hand-holding process to take you from foreign-trained to US-trained Dentist.
+              We&apos;ve built a step-by-step, hand-holding process to take you from foreign-trained to US-trained Dentist.
             </p>
           </article>
 

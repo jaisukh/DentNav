@@ -32,10 +32,6 @@ export function SearchableDropdownField({ question, value, onChange, options }: 
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  useEffect(() => {
-    if (open) setQuery("");
-  }, [open]);
-
   const placeholder = question.placeholder ?? "Search or select";
 
   return (
@@ -47,7 +43,15 @@ export function SearchableDropdownField({ question, value, onChange, options }: 
           aria-haspopup="listbox"
           aria-expanded={open}
           className="relative box-border flex h-9 w-full items-center rounded-full border border-slate-300/40 bg-white px-4 pr-10 text-left font-sans text-xs text-[#0C1A3A] focus:border-sky-500 focus:outline-none"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() =>
+            setOpen((wasOpen) => {
+              const nextOpen = !wasOpen;
+              if (nextOpen) {
+                setQuery("");
+              }
+              return nextOpen;
+            })
+          }
         >
           <span className={`min-w-0 flex-1 truncate ${value ? "text-[#0C1A3A]" : "text-slate-400"}`}>
             {value || placeholder}

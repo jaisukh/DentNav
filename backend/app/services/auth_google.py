@@ -14,18 +14,18 @@ GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
 GOOGLE_OAUTH_SCOPE = "openid email profile"
 
 
-def build_google_oauth_url() -> str:
-    query = urlencode(
-        {
-            "client_id": settings.google_client_id,
-            "redirect_uri": settings.google_redirect_uri,
-            "response_type": "code",
-            "scope": GOOGLE_OAUTH_SCOPE,
-            "access_type": "offline",
-            "prompt": "consent",
-        }
-    )
-    return f"{GOOGLE_AUTH_ENDPOINT}?{query}"
+def build_google_oauth_url(state: str | None = None) -> str:
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": settings.google_redirect_uri,
+        "response_type": "code",
+        "scope": GOOGLE_OAUTH_SCOPE,
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    if state:
+        params["state"] = state
+    return f"{GOOGLE_AUTH_ENDPOINT}?{urlencode(params)}"
 
 
 async def exchange_google_code_for_token(code: str) -> str:
@@ -63,11 +63,15 @@ async def fetch_google_email(access_token: str) -> str:
         return email
 
 
-async def upsert_google_user(session: AsyncSession, email: str, token: str) -> None:
+async def upsert_google_user(session: AsyncSession, email: str, token: str) -> str:
+    """Insert or update the user row for this Google email. Returns the user id."""
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     if user:
         user.token = token
     else:
-        session.add(User(id=str(uuid.uuid4()), email=email, token=token))
+        user = User(id=str(uuid.uuid4()), email=email, token=token)
+        session.add(user)
     await session.commit()
+    await session.refresh(user)
+    return user.id

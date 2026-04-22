@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { NavBar } from "@/components/landing/NavBar";
+import { NavBar } from "@/components/home/NavBar";
 import { analysisHandoffStorageKey, storeAnalysisResult } from "@/lib/analysis-session";
 import { fetchQuestionnaire } from "@/lib/api/questionnaire";
 import { submitAnalysis } from "@/lib/api/analysis";
@@ -40,10 +40,46 @@ export function QuestionnaireView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const setAnswer = useCallback((id: string, v: AnswerValue) => {
-    setAnswers((prev) => ({ ...prev, [id]: v }));
-  }, []);
+  const setAnswer = useCallback(
+    (id: string, v: AnswerValue) => {
+      setAnswers((prev) => {
+        const next = { ...prev, [id]: v };
+
+        if (id === "q1-degree-country") {
+          const country = typeof v === "string" ? v.trim() : "";
+          if (!country) {
+            delete next["q1b-degree-type"];
+            return next;
+          }
+          const allowed = doc?.degreesByCountry[country];
+          const degreeType = next["q1b-degree-type"];
+          if (
+            allowed?.length &&
+            typeof degreeType === "string" &&
+            degreeType &&
+            !allowed.includes(degreeType)
+          ) {
+            next["q1b-degree-type"] = "";
+          }
+          return next;
+        }
+
+        if (id === "q1b-degree-type") {
+          const countryRaw = next["q1-degree-country"];
+          const country = typeof countryRaw === "string" ? countryRaw.trim() : "";
+          const allowed = country ? doc?.degreesByCountry[country] : undefined;
+          if (allowed?.length && typeof v === "string" && v && !allowed.includes(v)) {
+            next["q1b-degree-type"] = "";
+          }
+        }
+
+        return next;
+      });
+    },
+    [doc],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -59,37 +95,18 @@ export function QuestionnaireView() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!doc) return;
-    const countryRaw = answers["q1-degree-country"];
-    const country = typeof countryRaw === "string" ? countryRaw.trim() : "";
-    if (!country) {
-      setAnswers((prev) => {
-        if (prev["q1b-degree-type"] === undefined) return prev;
-        const next = { ...prev };
-        delete next["q1b-degree-type"];
-        return next;
-      });
-      return;
-    }
-    const allowed = doc.degreesByCountry[country];
-    if (!allowed?.length) return;
-    const deg = answers["q1b-degree-type"];
-    if (typeof deg === "string" && deg && !allowed.includes(deg)) {
-      setAnswers((prev) => ({ ...prev, "q1b-degree-type": "" }));
-    }
-  }, [answers, doc]);
-
   const total = doc?.questions.length ?? 0;
   const filled = useMemo(() => {
     if (!doc) return 0;
     return doc.questions.filter((q) => isAnswerComplete(q, answers[q.id], answers)).length;
   }, [doc, answers]);
   const progressPct = total > 0 ? Math.round((filled / total) * 100) : 0;
+  const formComplete = total > 0 && filled === total;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (!formComplete || submitting) return;
+    setSubmitError(null);
     setSubmitting(true);
     const handoffId = crypto.randomUUID();
     try {
@@ -97,13 +114,16 @@ export function QuestionnaireView() {
       try {
         sessionStorage.setItem(analysisHandoffStorageKey(handoffId), JSON.stringify(payload));
       } catch {
-        /* quota — legacy key still attempted below */
+        /* quota — SESSION_KEY in storeAnalysisResult may still succeed */
       }
       storeAnalysisResult(payload);
-    } catch {
-      /* navigate without session handoff; analysis page will GET */
+      router.push(`/analysis?h=${encodeURIComponent(handoffId)}`);
+    } catch (err) {
+      setSubmitting(false);
+      const message =
+        err instanceof Error ? err.message : "Could not generate your analysis. Please try again.";
+      setSubmitError(message);
     }
-    router.push(`/analysis?h=${encodeURIComponent(handoffId)}`);
   };
 
   if (loadError) {
@@ -164,6 +184,14 @@ export function QuestionnaireView() {
           ))}
 
           <div className="flex w-full flex-col items-center gap-4 border-t border-slate-50 pt-4">
+            {submitError ? (
+              <p
+                role="alert"
+                className="w-full max-w-sm rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-800"
+              >
+                {submitError}
+              </p>
+            ) : null}
             <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path
@@ -178,9 +206,17 @@ export function QuestionnaireView() {
             </div>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !formComplete}
               aria-busy={submitting}
-              className="flex h-12 w-full max-w-sm cursor-pointer items-center justify-center gap-2 rounded-full border-0 bg-sky-500 text-base font-extrabold text-white shadow-[0_10px_15px_-3px_rgba(14,165,233,0.2),0_4px_6px_-4px_rgba(14,165,233,0.2)] transition-all hover:bg-sky-600 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-75"
+              aria-disabled={submitting || !formComplete}
+              title={!formComplete ? "Answer all questions to continue" : undefined}
+              className={
+                formComplete && !submitting
+                  ? "flex h-12 w-full max-w-sm cursor-pointer items-center justify-center gap-2 rounded-full border-0 bg-sky-500 text-base font-extrabold text-white shadow-[0_10px_15px_-3px_rgba(14,165,233,0.2),0_4px_6px_-4px_rgba(14,165,233,0.2)] transition-all hover:bg-sky-600 active:scale-[0.98]"
+                  : submitting
+                    ? "pointer-events-none flex h-12 w-full max-w-sm cursor-wait items-center justify-center gap-2 rounded-full border-0 bg-sky-500 text-base font-extrabold text-white opacity-90 shadow-[0_10px_15px_-3px_rgba(14,165,233,0.2),0_4px_6px_-4px_rgba(14,165,233,0.2)] transition-all"
+                    : "flex h-12 w-full max-w-sm cursor-not-allowed items-center justify-center gap-2 rounded-full border border-slate-300/40 bg-slate-50 text-base font-extrabold text-slate-400 shadow-none transition-all hover:bg-slate-50"
+              }
             >
               {submitting ? (
                 <svg

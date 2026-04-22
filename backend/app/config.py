@@ -4,16 +4,29 @@ from typing import Any
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_MONOREPO_ROOT = _BACKEND_DIR.parent
+# Monorepo `.env` then `backend/.env` (backend wins on duplicate keys). Docker sets
+# vars in the process env; optional files are skipped if missing.
+_ENV_FILES = tuple(
+    p
+    for p in (_MONOREPO_ROOT / ".env", _BACKEND_DIR / ".env")
+    if p.is_file()
+)
+REPO_ROOT = _BACKEND_DIR
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILES if _ENV_FILES else (".env",),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     backend_cors_origins: str = "http://localhost:3000,https://dentnav.vercel.app"
     cors_origin_regex: str | None = r"^https://[^/]+\.vercel\.app$"
     frontend_base_url: str = "http://localhost:3000"
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:15432/dentnav"
+    database_url: str = "postgresql://postgres:postgres@localhost:15432/dentnav"
 
     aws_region: str = "us-east-1"
     aws_s3_bucket: str = ""
@@ -26,7 +39,7 @@ class Settings(BaseSettings):
     google_redirect_uri: str = ""
 
     openai_api_key: str = ""
-    openai_model: str = "gpt-4o"
+    openai_model: str = "gpt-4.1"
 
     @field_validator("cors_origin_regex", mode="before")
     @classmethod

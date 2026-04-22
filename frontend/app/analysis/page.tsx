@@ -7,11 +7,10 @@ import {
   clearAnalysisResultFromSession,
   peekAnalysisResultFromSession,
 } from "@/lib/analysis-session";
-import { fetchAnalysis } from "@/lib/api/analysis";
-import type { AnalysisResultPayload } from "@/lib/analysis.types";
+import type { AnalysisPreviewPayload } from "@/lib/analysis.types";
 
 export default function AnalysisPage() {
-  const [data, setData] = useState<AnalysisResultPayload | null>(null);
+  const [data, setData] = useState<AnalysisPreviewPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -23,10 +22,10 @@ export default function AnalysisPage() {
       const raw = sessionStorage.getItem(analysisHandoffStorageKey(handoffId));
       if (raw) {
         try {
-          const payload = JSON.parse(raw) as AnalysisResultPayload;
-          setData(payload);
+          const payload = JSON.parse(raw) as AnalysisPreviewPayload;
           queueMicrotask(() => {
             if (cancelled) return;
+            setData(payload);
             sessionStorage.removeItem(analysisHandoffStorageKey(handoffId));
             clearAnalysisResultFromSession();
             if (window.location.pathname === "/analysis" && window.location.search.includes("h=")) {
@@ -37,16 +36,16 @@ export default function AnalysisPage() {
             cancelled = true;
           };
         } catch {
-          /* fall through to legacy / GET */
+          /* fall through to legacy session */
         }
       }
     }
 
     const fromQuestionnaire = peekAnalysisResultFromSession();
     if (fromQuestionnaire) {
-      setData(fromQuestionnaire);
       queueMicrotask(() => {
         if (!cancelled) {
+          setData(fromQuestionnaire);
           clearAnalysisResultFromSession();
           if (window.location.pathname === "/analysis" && window.location.search.includes("h=")) {
             window.history.replaceState(null, "", "/analysis");
@@ -58,13 +57,15 @@ export default function AnalysisPage() {
       };
     }
 
-    fetchAnalysis()
-      .then((payload) => {
-        if (!cancelled) setData(payload);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Could not load analysis.");
-      });
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setError(
+          handoffId
+            ? "We couldn't load your results. The server request may have failed, or storage was unavailable. Please return to the questionnaire and try again."
+            : "No analysis to display. Please complete the questionnaire.",
+        );
+      }
+    });
     return () => {
       cancelled = true;
     };

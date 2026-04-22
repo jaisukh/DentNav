@@ -1,11 +1,18 @@
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
-
 from app.db.base import Base
 from app.models.user import User  # noqa: F401
+from app.models.analysis import Analysis  # noqa: F401
+from dotenv import load_dotenv
+from sqlalchemy import engine_from_config, pool
+
+# Load .env for local CLI use (no-op when DATABASE_URL is already in the environment,
+# e.g. inside Docker / Railway where the platform injects the variable directly).
+_env_file = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(_env_file, override=False)
 
 config = context.config
 
@@ -16,9 +23,16 @@ target_metadata = Base.metadata
 
 
 def get_sync_database_url() -> str:
+    # Alembic uses a sync driver (psycopg2). Normalize whatever scheme the
+    # platform provides (postgres://, postgresql://, postgresql+asyncpg://, ...)
+    # to a psycopg2-compatible URL.
     url = os.environ.get("DATABASE_URL", "")
-    if "+asyncpg" in url:
-        return url.replace("+asyncpg", "")
+    if not url:
+        return url
+    if url.startswith("postgresql+asyncpg://"):
+        return "postgresql://" + url[len("postgresql+asyncpg://") :]
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
     return url
 
 

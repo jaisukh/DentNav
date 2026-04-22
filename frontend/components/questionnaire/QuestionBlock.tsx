@@ -12,7 +12,7 @@ export function QuestionBlock({ order, label, description, children }: QuestionB
 
   return (
     <div className="flex w-full flex-col items-start gap-2">
-      <div className="flex w-full min-h-6 items-start gap-2">
+      <div className="flex w-full min-h-6 items-center gap-2">
         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[10px] font-bold text-sky-500">
           {num}
         </div>
