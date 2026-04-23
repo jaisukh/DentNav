@@ -44,14 +44,30 @@ export default function LandingPage() {
     <div className="w-full max-w-6xl pb-6">
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <header className="mb-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+      <header className="mb-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
           <div className="min-w-0 max-w-3xl flex-1">
-            <h1 className="font-display text-3xl font-bold tracking-tight text-dent-ink sm:text-4xl">
-              Welcome back
+
+            {/* Live status pill */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-dent-sky/25 bg-white/90 px-3 py-1 shadow-[0_6px_18px_-10px_rgba(14,165,233,0.45)]">
+              <span className="relative flex h-2 w-2" aria-hidden>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-dent-sky" />
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-dent-deep">
+                Your licensing dashboard
+              </span>
+            </div>
+
+            <h1 className="mt-4 font-display text-3xl font-bold tracking-tight text-dent-ink sm:text-[2.5rem] sm:leading-[1.08]">
+              Welcome back —{" "}
+              <span className="bg-gradient-to-r from-dent-deep via-dent-sky to-[#38BDF8] bg-clip-text text-transparent">
+                your U.S. licensing roadmap
+              </span>{" "}
+              is ready to personalize.
             </h1>
-            <p className="mt-2 text-sm leading-relaxed text-[#64748B] sm:text-base">
-              Navigate U.S. dental licensing with a roadmap built entirely around your credentials, target states, and program type.
+
+            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-[#475569] sm:text-base">
+              One place for every exam, credential requirement, and state-specific licensing rule — filtered to your profile, target states, and program type.
             </p>
 
             <div className="mt-4 grid gap-2 sm:grid-cols-3">
@@ -65,20 +81,6 @@ export default function LandingPage() {
                   <p className="mt-0.5 text-xs font-semibold leading-snug text-dent-ink">{body}</p>
                 </div>
               ))}
-            </div>
-
-            <p className="mt-3 text-[11px] leading-relaxed text-[#64748B]">
-              Your exam sequence, credential requirements, and all state-specific licensing rules — filtered to your profile, target states, and program type.
-            </p>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-[#64748B]">
-              Open your roadmap anytime on any device, revisit it as your plans evolve, or bring it to a 1:1 consultation for expert guidance.
-            </p>
-
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-              <p className="text-sm font-bold text-shimmer">Mapped to your credentials.</p>
-              <p className="text-sm font-bold text-shimmer" style={{ animationDelay: "1.3s" }}>Built for your timeline.</p>
-              <p className="text-sm font-bold text-shimmer" style={{ animationDelay: "2.6s" }}>Yours to revisit, anytime.</p>
-              <p className="text-sm font-bold text-shimmer" style={{ animationDelay: "3.9s" }}>Every state rule, decoded.</p>
             </div>
           </div>
           <BrochureDownload />
