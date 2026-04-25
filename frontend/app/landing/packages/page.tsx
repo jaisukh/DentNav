@@ -165,7 +165,7 @@ const consultPackages: ConsultPackage[] = [
   {
     category: "Foundation",
     title: "Introductory Consultation",
-    duration: "30 min",
+    duration: "45 min",
     sessions: "1 session",
     format: "Live video",
     description:
@@ -188,7 +188,7 @@ const consultPackages: ConsultPackage[] = [
   {
     category: "Immigration",
     title: "Visa Guidance",
-    duration: "30 min",
+    duration: "60 min",
     sessions: "1 session",
     format: "Live video",
     description:
@@ -212,7 +212,7 @@ const consultPackages: ConsultPackage[] = [
   {
     category: "Career",
     title: "Interview Preparation",
-    duration: "30 min",
+    duration: "60 min",
     sessions: "1 session",
     format: "Live mock interviews",
     description:
@@ -236,7 +236,7 @@ const consultPackages: ConsultPackage[] = [
   {
     category: "Application",
     title: "CV & SoP Preparation",
-    duration: "30 min",
+    duration: "60 min",
     sessions: "1 session",
     format: "Video session. Documents",
     description:
@@ -260,7 +260,7 @@ const consultPackages: ConsultPackage[] = [
   {
     category: "Applications",
     title: "ADEA CAAPID & PASS Guidance",
-    duration: "30 min",
+    duration: "60 min",
     sessions: "1 session",
     format: "Live video",
     description:
@@ -284,7 +284,7 @@ const consultPackages: ConsultPackage[] = [
   {
     category: "Licensing",
     title: "State License Guidance",
-    duration: "30 min",
+    duration: "60 min",
     sessions: "1 session",
     format: "Video · state-specific",
     description:
