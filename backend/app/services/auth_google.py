@@ -14,7 +14,7 @@ GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
 GOOGLE_OAUTH_SCOPE = "openid email profile"
 
 
-def build_google_oauth_url(state: str | None = None) -> str:
+def build_google_oauth_url(state: str) -> str:
     params = {
         "client_id": settings.google_client_id,
         "redirect_uri": settings.google_redirect_uri,
@@ -22,9 +22,8 @@ def build_google_oauth_url(state: str | None = None) -> str:
         "scope": GOOGLE_OAUTH_SCOPE,
         "access_type": "offline",
         "prompt": "consent",
+        "state": state,
     }
-    if state:
-        params["state"] = state
     return f"{GOOGLE_AUTH_ENDPOINT}?{urlencode(params)}"
 
 
