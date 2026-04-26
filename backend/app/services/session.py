@@ -1,6 +1,6 @@
 """JWT-based session cookie helpers."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 
@@ -11,7 +11,7 @@ _SESSION_MAX_AGE = timedelta(days=30)
 
 
 def create_session_token(user_id: str) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": user_id,
         "iat": now,

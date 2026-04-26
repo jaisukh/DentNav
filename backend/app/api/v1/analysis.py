@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
-from app.services.session import verify_session_token
 from app.schemas.analysis import (
     AnalysisAccessStatusResponse,
     AnalysisPreviewResponse,
@@ -19,6 +18,7 @@ from app.services.analysis_store import (
 )
 from app.services.answers_validate import validate_answers
 from app.services.questionnaire_load import load_questionnaire_document
+from app.services.session import verify_session_token
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
