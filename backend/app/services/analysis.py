@@ -3,6 +3,7 @@ import re
 from datetime import date
 from typing import Any
 
+from braintrust import wrap_openai
 from openai import AsyncOpenAI
 
 from app.config import settings
@@ -3699,7 +3700,7 @@ async def generate_analysis_from_answers(answers: AnswerMap) -> dict[str, Any]:
         + runtime_context
     )
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = wrap_openai(AsyncOpenAI(api_key=settings.openai_api_key))
 
     messages = [
         {"role": "system", "content": system_prompt},

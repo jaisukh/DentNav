@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1"
 
+    braintrust_api_key: str = ""
+
     @field_validator("cors_origin_regex", mode="before")
     @classmethod
     def _cors_regex_empty_means_default(cls, v: Any) -> Any:
