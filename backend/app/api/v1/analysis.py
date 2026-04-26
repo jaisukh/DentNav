@@ -118,8 +118,4 @@ async def get_analysis_access_status(
 
 
 def _current_user_id(request: Request) -> str | None:
-    """Placeholder until cookie/JWT auth is wired up."""
-    user_id = request.headers.get("x-user-id")
-    if user_id:
-        return user_id
     return request.cookies.get("dentnav_user_id")
