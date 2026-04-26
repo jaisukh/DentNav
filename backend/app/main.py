@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 
+import braintrust
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,6 +13,8 @@ from app.db.session import engine
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if settings.braintrust_api_key:
+        braintrust.login(api_key=settings.braintrust_api_key)
     yield
     await engine.dispose()
 
