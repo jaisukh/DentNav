@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     backend_cors_origins: str = "http://localhost:3000,https://dentnav.vercel.app"
     cors_origin_regex: str | None = r"^https://[^/]+\.vercel\.app$"
+    secret_key: str = "change-me-to-a-random-secret"
     frontend_base_url: str = "http://localhost:3000"
     database_url: str = "postgresql://postgres:postgres@localhost:15432/dentnav"
 

@@ -14,6 +14,7 @@ from app.services.auth_google import (
     fetch_google_email,
     upsert_google_user,
 )
+from app.services.session import create_session_token
 
 router = APIRouter(prefix="/auth/google", tags=["auth"])
 
@@ -84,7 +85,7 @@ async def google_callback(
     secure, samesite = _session_cookie_kwargs()
     response.set_cookie(
         key="dentnav_user_id",
-        value=user_id,
+        value=create_session_token(user_id),
         max_age=60 * 60 * 24 * 30,
         httponly=True,
         samesite=samesite,

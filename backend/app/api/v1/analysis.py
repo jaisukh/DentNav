@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
+from app.services.session import verify_session_token
 from app.schemas.analysis import (
     AnalysisAccessStatusResponse,
     AnalysisPreviewResponse,
@@ -118,4 +119,7 @@ async def get_analysis_access_status(
 
 
 def _current_user_id(request: Request) -> str | None:
-    return request.cookies.get("dentnav_user_id")
+    token = request.cookies.get("dentnav_user_id")
+    if not token:
+        return None
+    return verify_session_token(token)
