@@ -3,7 +3,8 @@ import re
 from datetime import date
 from typing import Any
 
-from braintrust import wrap_openai
+import braintrust
+from braintrust import traced, wrap_openai
 from openai import AsyncOpenAI
 
 from app.config import settings
@@ -3677,6 +3678,7 @@ Candidates will make decisions based on your state analysis. Shallow state conte
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@traced
 async def generate_analysis_from_answers(answers: AnswerMap) -> dict[str, Any]:
     if not settings.has_openai_config:
         raise ValueError("Missing OPENAI_API_KEY")
@@ -3781,4 +3783,6 @@ async def generate_analysis_from_answers(answers: AnswerMap) -> dict[str, Any]:
     content = completion.choices[0].message.content or "{}"
     parsed = json.loads(_strip_markdown_code_fence(content))
     normalized = _normalize_response(parsed, answers)
-    return _sanitize_response_tree(normalized)
+    result = _sanitize_response_tree(normalized)
+    braintrust.flush()
+    return result
