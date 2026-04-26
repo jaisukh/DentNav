@@ -1,7 +1,7 @@
 import re
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,7 @@ from app.services.auth_google import (
     fetch_google_email,
     upsert_google_user,
 )
-from app.services.session import create_session_token
+from app.services.session import create_session_token, generate_csrf_nonce, verify_csrf_nonce
 
 router = APIRouter(prefix="/auth/google", tags=["auth"])
 
@@ -48,23 +48,52 @@ async def google_login(
 ):
     if not settings.has_google_oauth_config:
         raise HTTPException(status_code=500, detail=_oauth_missing)
-    # The OAuth `state` round-trips back to /callback so we can associate the
-    # anonymous analysis row with the user right after sign-in.
-    state = _sanitize_analysis_id(analysis_id)
-    return RedirectResponse(url=build_google_oauth_url(state=state))
+    nonce = generate_csrf_nonce()
+    response = RedirectResponse(url=build_google_oauth_url(state=nonce))
+    secure, samesite = _session_cookie_kwargs()
+    callback_path = "/api/v1/auth/google/callback"
+    response.set_cookie(
+        key="oauth_nonce",
+        value=nonce,
+        max_age=300,
+        httponly=True,
+        samesite=samesite,
+        secure=secure,
+        path=callback_path,
+    )
+    aid = _sanitize_analysis_id(analysis_id)
+    if aid:
+        response.set_cookie(
+            key="oauth_analysis_id",
+            value=aid,
+            max_age=300,
+            httponly=True,
+            samesite=samesite,
+            secure=secure,
+            path=callback_path,
+        )
+    return response
 
 
 @router.get("/callback")
 async def google_callback(
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     code: Annotated[str | None, Query()] = None,
     state: Annotated[str | None, Query()] = None,
 ):
     if not code:
         raise HTTPException(status_code=400, detail="Missing OAuth code")
-
+    if not state:
+        raise HTTPException(status_code=400, detail="Missing OAuth state")
     if not settings.has_google_oauth_config:
         raise HTTPException(status_code=500, detail=_oauth_missing)
+
+    # --- CSRF verification (must happen before anything else) ---
+    cookie_nonce = request.cookies.get("oauth_nonce", "")
+    if not verify_csrf_nonce(state, cookie_nonce):
+        raise HTTPException(status_code=403, detail="Invalid or expired OAuth state")
+
     try:
         token = await exchange_google_code_for_token(code)
         email = await fetch_google_email(token)
@@ -72,17 +101,13 @@ async def google_callback(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"OAuth callback failed: {exc}") from exc
 
-    # Link the anonymous analysis (if we have one from the login redirect) to
-    # this user so we can surface it after payment without asking them to
-    # refill the questionnaire.
-    analysis_id = _sanitize_analysis_id(state)
+    analysis_id = _sanitize_analysis_id(request.cookies.get("oauth_analysis_id"))
     if analysis_id:
         await claim_analysis(session, analysis_id, user_id)
 
-    # Always land on the dedicated post-sign-in page. How/when to surface the
-    # claimed analysis row is a separate product decision (gated by payment).
     response = RedirectResponse(url=f"{settings.frontend_base_url}/landing")
     secure, samesite = _session_cookie_kwargs()
+    callback_path = "/api/v1/auth/google/callback"
     response.set_cookie(
         key="dentnav_user_id",
         value=create_session_token(user_id),
@@ -90,6 +115,16 @@ async def google_callback(
         httponly=True,
         samesite=samesite,
         secure=secure,
+    )
+    response.delete_cookie(
+        key="oauth_nonce", httponly=True, samesite=samesite, secure=secure, path=callback_path,
+    )
+    response.delete_cookie(
+        key="oauth_analysis_id",
+        httponly=True,
+        samesite=samesite,
+        secure=secure,
+        path=callback_path,
     )
     return response
 
