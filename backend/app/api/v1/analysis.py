@@ -18,6 +18,7 @@ from app.services.analysis_store import (
 )
 from app.services.answers_validate import validate_answers
 from app.services.questionnaire_load import load_questionnaire_document
+from app.services.session import verify_session_token
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -118,4 +119,7 @@ async def get_analysis_access_status(
 
 
 def _current_user_id(request: Request) -> str | None:
-    return request.cookies.get("dentnav_user_id")
+    token = request.cookies.get("dentnav_user_id")
+    if not token:
+        return None
+    return verify_session_token(token)
