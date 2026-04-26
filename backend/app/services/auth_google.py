@@ -11,6 +11,7 @@ from app.models.user import User
 GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
+GOOGLE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
 GOOGLE_OAUTH_SCOPE = "openid email profile"
 
 
@@ -60,6 +61,20 @@ async def fetch_google_email(access_token: str) -> str:
         if not email:
             raise ValueError("Google userinfo returned no email")
         return email
+
+
+async def revoke_google_token(access_token: str) -> bool:
+    """Best-effort token revocation. Returns True if Google accepted."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                GOOGLE_REVOKE_ENDPOINT,
+                params={"token": access_token},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            return resp.status_code == 200
+    except Exception:
+        return False
 
 
 async def upsert_google_user(session: AsyncSession, email: str, token: str) -> str:

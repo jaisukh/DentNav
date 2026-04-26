@@ -3,18 +3,26 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.session import get_session
+from app.models.user import User
 from app.services.analysis_store import claim_analysis
 from app.services.auth_google import (
     build_google_oauth_url,
     exchange_google_code_for_token,
     fetch_google_email,
+    revoke_google_token,
     upsert_google_user,
 )
-from app.services.session import create_session_token, generate_csrf_nonce, verify_csrf_nonce
+from app.services.session import (
+    create_session_token,
+    generate_csrf_nonce,
+    verify_csrf_nonce,
+    verify_session_token,
+)
 
 router = APIRouter(prefix="/auth/google", tags=["auth"])
 
@@ -133,7 +141,23 @@ async def google_callback(
 
 
 @router.post("/logout")
-async def google_logout(response: Response) -> dict[str, bool]:
+async def google_logout(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    response: Response,
+) -> dict[str, bool]:
+    # Best-effort token revocation
+    cookie = request.cookies.get("dentnav_user_id")
+    if cookie:
+        user_id = verify_session_token(cookie)
+        if user_id:
+            result = await session.execute(select(User).where(User.id == user_id))
+            user = result.scalar_one_or_none()
+            if user and user.token:
+                await revoke_google_token(user.token)
+                user.token = ""
+                await session.commit()
+
     secure, samesite = _session_cookie_kwargs()
     response.delete_cookie(
         key="dentnav_user_id",
