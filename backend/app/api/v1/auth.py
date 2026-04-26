@@ -81,7 +81,10 @@ async def google_callback(
     session: Annotated[AsyncSession, Depends(get_session)],
     code: Annotated[str | None, Query()] = None,
     state: Annotated[str | None, Query()] = None,
+    error: Annotated[str | None, Query()] = None,
 ):
+    if error:
+        return RedirectResponse(url=f"{settings.frontend_base_url}/auth/login?error={error}")
     if not code:
         raise HTTPException(status_code=400, detail="Missing OAuth code")
     if not state:
