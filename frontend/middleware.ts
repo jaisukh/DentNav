@@ -14,8 +14,12 @@ import { type NextRequest, NextResponse } from "next/server";
  * component inside the landing layout then calls /api/v1/analysis/access-status
  * to confirm the session is still valid with the backend, and handles the
  * case where the cookie exists but the session has expired.
+ *
+ * NOTE: Next.js requires this file to be named `middleware.ts` (or .js) and
+ * exports a function named `middleware` — both are required for the runtime
+ * to register it. Renaming either will silently disable the guard.
  */
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const userId = request.cookies.get("dentnav_user_id");
 
   if (!userId?.value) {

@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  type ReactNode,
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import {
   type LandingAccessStatus,
   applyStaleRemovalSync,
@@ -26,14 +32,19 @@ const DEFAULT: AuthStatus = {
   staleQuestionnaireRemoved: false,
 };
 
+const AuthStatusContext = createContext<AuthStatus | null>(null);
+
 /**
- * Single source of truth for the navbar/page-level access flags.
+ * Provider that performs a single `/access-status` fetch on mount and shares
+ * the result with every descendant via React context.
  *
- * Re-uses the existing /access-status endpoint so callers benefit from the
- * stale-questionnaire cleanup (X-Removed-Stale-Questionnaire header) without
- * needing to wire it themselves.
+ * Wrap once near the root of the app (in `app/layout.tsx`) so that all of
+ * `<SignInLink>`, `<QuestionnaireLink>`, `<OneTimeAccessCTA>`, the navbar
+ * components, and the AuthGuard share the same network request instead of
+ * each issuing their own. Without this, a typical /landing page load would
+ * hit `/access-status` 3–5 times concurrently.
  */
-export function useAuthStatus(): AuthStatus {
+export function AuthStatusProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthStatus>(DEFAULT);
 
   useEffect(() => {
@@ -64,5 +75,20 @@ export function useAuthStatus(): AuthStatus {
     };
   }, []);
 
-  return state;
+  return (
+    <AuthStatusContext.Provider value={state}>
+      {children}
+    </AuthStatusContext.Provider>
+  );
+}
+
+/**
+ * Read the current auth status. Must be used inside `<AuthStatusProvider>`.
+ * If no provider is mounted (e.g. an isolated test, or an island that escapes
+ * the root layout) we degrade gracefully to the DEFAULT value rather than
+ * throwing — this keeps marketing-only pages safe.
+ */
+export function useAuthStatus(): AuthStatus {
+  const ctx = useContext(AuthStatusContext);
+  return ctx ?? DEFAULT;
 }

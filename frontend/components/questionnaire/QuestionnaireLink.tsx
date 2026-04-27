@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { QuestionnaireDoneModal } from "@/components/ui/QuestionnaireDoneModal";
-import { useAuthStatus } from "@/lib/use-auth-status";
+import { useAuthStatus } from "@/lib/auth-status-context";
 
 type LinkProps = ComponentPropsWithoutRef<typeof Link>;
 

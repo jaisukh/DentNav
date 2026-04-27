@@ -1,3 +1,14 @@
+"""Google OAuth helpers.
+
+Note on token persistence: we deliberately do NOT store the OAuth access token
+(see migration `0003_users_names_has_filled_drop_token`). The token is only
+used during the callback to read the user's profile (`given_name`,
+`family_name`, `email`); after that we rely on our own signed JWT session
+cookie. This means we can't call Google's `/revoke` endpoint at logout, but
+Google access tokens auto-expire within ~1h and the session JWT is
+invalidated by clearing the cookie, so the practical exposure is limited.
+"""
+
 import uuid
 from dataclasses import dataclass
 from urllib.parse import urlencode
@@ -15,7 +26,8 @@ GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
 GOOGLE_OAUTH_SCOPE = "openid email profile"
 
 
-def build_google_oauth_url(state: str | None = None) -> str:
+def build_google_oauth_url(state: str) -> str:
+    """`state` is required and must be the CSRF nonce verified in the callback."""
     params = {
         "client_id": settings.google_client_id,
         "redirect_uri": settings.google_redirect_uri,
@@ -23,9 +35,8 @@ def build_google_oauth_url(state: str | None = None) -> str:
         "scope": GOOGLE_OAUTH_SCOPE,
         "access_type": "offline",
         "prompt": "consent",
+        "state": state,
     }
-    if state:
-        params["state"] = state
     return f"{GOOGLE_AUTH_ENDPOINT}?{urlencode(params)}"
 
 

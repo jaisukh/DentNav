@@ -7,23 +7,14 @@ import { PaymentPrompt } from "@/components/landing/PaymentPrompt";
 import { QuestionnairePrompt } from "@/components/landing/QuestionnairePrompt";
 import { ViewAnalysis } from "@/components/landing/ViewAnalysis";
 import { InfoToast } from "@/components/ui/InfoToast";
-import {
-  type LandingAccessStatus,
-  applyStaleRemovalSync,
-  fetchLandingAccessStatus,
-  toLandingStatus,
-} from "@/lib/api/landing";
-
-const DEFAULT_STATUS: LandingAccessStatus = {
-  signedIn: false,
-  hasAnsweredQuestionnaire: false,
-  hasPaid: false,
-  latestAnalysisId: null,
-};
+import { useAuthStatus } from "@/lib/auth-status-context";
 
 export default function LandingPage() {
-  const [status, setStatus] = useState<LandingAccessStatus>(DEFAULT_STATUS);
-  const [loading, setLoading] = useState(true);
+  // Reads the single /access-status fetch initiated by AuthStatusProvider in
+  // app/layout.tsx — every other landing component (AuthGuard, NavBar links,
+  // packages CTA, etc.) shares this same value, so the endpoint is hit once
+  // per page load instead of 3–5 times.
+  const status = useAuthStatus();
   const [reclaimedToast, setReclaimedToast] = useState(false);
   const dismissReclaimed = useCallback(() => setReclaimedToast(false), []);
 
@@ -40,27 +31,6 @@ export default function LandingPage() {
         `${window.location.pathname}${next ? `?${next}` : ""}`,
       );
     }
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    async function loadStatus() {
-      try {
-        const next = await fetchLandingAccessStatus();
-        if (active) {
-          applyStaleRemovalSync(next);
-          setStatus(toLandingStatus(next));
-        }
-      } catch {
-        if (active) setStatus(DEFAULT_STATUS);
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void loadStatus();
-    return () => {
-      active = false;
-    };
   }, []);
 
   return (
@@ -121,7 +91,7 @@ export default function LandingPage() {
 
       {/* ── Prompt card ──────────────────────────────────────────────── */}
       <div className="w-full">
-        {loading ? (
+        {!status.ready ? (
           <div className="rounded-3xl border border-[#E2E8F0] bg-white p-8 text-sm font-medium text-[#64748B]">
             Checking your account progress...
           </div>

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     backend_cors_origins: str = "http://localhost:3000,https://dentnav.vercel.app"
     cors_origin_regex: str | None = r"^https://[^/]+\.vercel\.app$"
+    secret_key: str = "change-me-to-a-random-secret"
     frontend_base_url: str = "http://localhost:3000"
     database_url: str = "postgresql://postgres:postgres@localhost:15432/dentnav"
 
@@ -40,6 +41,8 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1"
+
+    braintrust_api_key: str = ""
 
     @field_validator("cors_origin_regex", mode="before")
     @classmethod

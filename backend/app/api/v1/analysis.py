@@ -20,6 +20,7 @@ from app.services.analysis_store import (
 from app.services.user_store import get_user_by_id
 from app.services.answers_validate import validate_answers
 from app.services.questionnaire_load import load_questionnaire_document
+from app.services.session import verify_session_token
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -90,10 +91,8 @@ async def get_analysis_access_status(
     ):
         response.headers["X-Removed-Stale-Questionnaire"] = "1"
 
-    user = await get_user_by_id(session, user_id)
-    if user is None:
-        return AnalysisAccessStatusResponse(signedIn=False)
-
+    # `delete_stale_unclaimed_for_double_submit` only deletes Analysis rows;
+    # `user` is still valid here (commit happened on the `analyses` table).
     analysis = await get_latest_analysis_for_user(session, user_id)
     # `user.has_filled` is authoritative; `analysis is not None` covers legacy rows
     # if the flag ever drifted.
@@ -185,8 +184,7 @@ async def get_full_analysis(
 
 
 def _current_user_id(request: Request) -> str | None:
-    """Placeholder until cookie/JWT auth is wired up."""
-    user_id = request.headers.get("x-user-id")
-    if user_id:
-        return user_id
-    return request.cookies.get("dentnav_user_id")
+    token = request.cookies.get("dentnav_user_id")
+    if not token:
+        return None
+    return verify_session_token(token)

@@ -2,12 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BrandLogo } from "@/components/landing/BrandLogo";
+import { BrandLogo } from "@/components/home/BrandLogo";
 import { InfoToast } from "@/components/ui/InfoToast";
-import {
-  applyStaleRemovalSync,
-  fetchLandingAccessStatus,
-} from "@/lib/api/landing";
+import { useAuthStatus } from "@/lib/auth-status-context";
 
 type AuthState = "verifying" | "authenticated" | "failed";
 
@@ -18,53 +15,38 @@ const REDIRECT_DELAY_MS = 2500;
  *
  * The middleware already blocks requests with no cookie at the Edge.
  * This component handles the next layer: a cookie exists but the backend
- * session is invalid or expired. It calls /api/v1/analysis/access-status,
- * shows a full-screen verifying state while the request is in-flight, and
- * redirects to /auth/login with a clear message if the session check fails.
+ * session is invalid or expired. It reads the shared auth status from the
+ * `AuthStatusProvider` (root layout) so the underlying /access-status fetch
+ * is shared with `<SignInLink>`, `<QuestionnaireLink>`, etc. — no duplicate
+ * network calls per page load.
  */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const auth = useAuthStatus();
   const [authState, setAuthState] = useState<AuthState>("verifying");
   const [dupToast, setDupToast] = useState(false);
   const dismissDupToast = useCallback(() => setDupToast(false), []);
 
   useEffect(() => {
-    let active = true;
+    if (!auth.ready) return;
 
-    async function verify() {
-      try {
-        const result = await fetchLandingAccessStatus();
-        if (!active) return;
-
-        applyStaleRemovalSync(result);
-        if (result.staleQuestionnaireRemoved) {
-          setDupToast(true);
-        }
-
-        if (result.signedIn) {
-          setAuthState("authenticated");
-        } else {
-          // Cookie present but backend says the session is no longer valid.
-          setAuthState("failed");
-          setTimeout(() => {
-            if (active) router.replace("/auth/login?reason=session_expired");
-          }, REDIRECT_DELAY_MS);
-        }
-      } catch {
-        if (!active) return;
-        // Network failure or unexpected backend error.
-        setAuthState("failed");
-        setTimeout(() => {
-          if (active) router.replace("/auth/login?reason=error");
-        }, REDIRECT_DELAY_MS);
-      }
+    if (auth.staleQuestionnaireRemoved) {
+      setDupToast(true);
     }
 
-    void verify();
-    return () => {
-      active = false;
-    };
-  }, [router]);
+    if (auth.signedIn) {
+      setAuthState("authenticated");
+      return;
+    }
+
+    // Cookie present but backend says the session is no longer valid (or the
+    // request errored out and the provider degraded to DEFAULT).
+    setAuthState("failed");
+    const timer = setTimeout(() => {
+      router.replace("/auth/login?reason=session_expired");
+    }, REDIRECT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [auth.ready, auth.signedIn, auth.staleQuestionnaireRemoved, router]);
 
   if (authState === "verifying") {
     return <VerifyingScreen />;

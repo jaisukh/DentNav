@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { AnswersPreviewModal } from "@/components/ui/AnswersPreviewModal";
 import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
-import { useAuthStatus } from "@/lib/use-auth-status";
+import { useAuthStatus } from "@/lib/auth-status-context";
 
 function Arrow({ className = "h-4 w-4" }: { className?: string }) {
   return (

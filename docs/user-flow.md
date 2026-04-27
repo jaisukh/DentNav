@@ -12,10 +12,10 @@
 | Layer | Technology |
 |---|---|
 | Frontend | Next.js 16.2.1 (App Router, Turbopack) |
-| Route guard | `proxy.ts` (Next.js Edge) + `AuthGuard` client component |
+| Route guard | `middleware.ts` (Next.js Edge) + `AuthGuard` client component |
 | Backend | FastAPI (Python 3.12, async) |
 | Database | PostgreSQL 16 · SQLAlchemy 2 async · Alembic |
-| Auth | Google OAuth 2.0 (backend-side redirect, httpOnly cookie) |
+| Auth | Google OAuth 2.0 (backend-side redirect, signed JWT in httpOnly cookie, CSRF nonce on `state`) |
 | CORS | `expose_headers` includes `X-Removed-Stale-Questionnaire` (read by the Next app) |
 | Payments | Stripe Checkout (one-time, hosted page) — _integration pending_ |
 | AI | OpenAI (GPT-4o) |
@@ -28,9 +28,9 @@
 The `/landing/*` route group is the authenticated app shell. It is guarded
 by two independent layers that run in sequence.
 
-### Layer 1 — `proxy.ts` (Edge, runs before render)
+### Layer 1 — `middleware.ts` (Edge, runs before render)
 
-`frontend/proxy.ts` is checked by Next.js before any page in `/landing/**`
+`frontend/middleware.ts` is checked by Next.js before any page in `/landing/**`
 is rendered. It reads the `dentnav_user_id` httpOnly cookie.
 
 ```
@@ -40,8 +40,16 @@ Cookie absent  →  302 redirect to /auth/login?next={pathname}
 Cookie present →  NextResponse.next() — request continues to the page
 ```
 
-This is a presence check only. It cannot verify the cookie value with the
-backend because Edge functions cannot reach the FastAPI server synchronously.
+This is a presence check only. It cannot verify the JWT signature against the
+backend's secret because Edge functions cannot reach the FastAPI server
+synchronously. The signature check happens in Layer 2 via
+`verify_session_token` on the backend.
+
+> ⚠️ The filename and exported function name are both required by Next.js —
+> the file MUST be named `middleware.ts` (or `.js`) and export a function
+> named `middleware`. Renaming either silently disables the guard. A
+> previous iteration of this file was named `proxy.ts`, which let
+> unauthenticated users reach `/landing/*` until the AuthGuard fired.
 
 ### Layer 2 — `AuthGuard` (Client component, inside landing layout)
 
@@ -72,7 +80,7 @@ navigation between `/landing`, `/landing/packages`, and `/landing/about`.
 
 ### Protected vs. public routes
 
-| Route | proxy.ts | AuthGuard | Accessible without auth |
+| Route | middleware.ts | AuthGuard | Accessible without auth |
 |---|---|---|---|
 | `/` | No | No | Yes |
 | `/questionnaire` | No | No | Yes — intentionally anonymous |
@@ -85,7 +93,7 @@ navigation between `/landing`, `/landing/packages`, and `/landing/about`.
 
 > **"Get Access"** on `/landing/packages` is therefore unreachable without
 > a valid session. Unauthenticated users are redirected to `/auth/login`
-> by `proxy.ts` before the page renders.
+> by `middleware.ts` before the page renders.
 
 ---
 
@@ -300,22 +308,26 @@ Set-Cookie: dentnav_user_id={user.id}; HttpOnly; SameSite=Lax; Max-Age=2592000
 GET /landing
   Cookie: dentnav_user_id={user.id}
 
-proxy.ts (Edge):
+middleware.ts (Edge):
   cookie present → NextResponse.next()   ← <1 ms, no DB, no API
 
-LandingLayout mounts → AuthGuard mounts:
+RootLayout: <AuthStatusProvider> issues exactly one fetch on mount:
   GET /api/v1/analysis/access-status?local_analysis_id={from localStorage or omitted}
-    FastAPI: reads cookie → optional cleanup (Case E, §7) → queries latest analysis for user
+    FastAPI: reads cookie → verify_session_token(jwt) → optional cleanup
+             (Case E, §7) → queries latest analysis for user
     DB: may DELETE one unclaimed analysis row, then
         SELECT … FROM analyses WHERE user_id=… ORDER BY created_at DESC LIMIT 1
   ← { signedIn:true, hasAnsweredQuestionnaire:true, hasPaid:false, latestAnalysisId:"…" }
   ← (optional) X-Removed-Stale-Questionnaire: 1
-  AuthGuard: signedIn → renders children (full layout)
 
-LandingPage mounts:
-  GET /api/v1/analysis/access-status?local_analysis_id=…   (second call — same query shape)
-  ← same response shape; second call normally omits the header (row already removed)
-  hasPaid:false → renders PaymentPrompt → "View packages & pricing" → /landing/packages
+The result is exposed via `useAuthStatus()` to every consumer:
+  • AuthGuard          → gates the layout (signedIn check)
+  • LandingPage        → picks QuestionnairePrompt / PaymentPrompt / ViewAnalysis
+  • SignInLink         → opens AlreadySignedInModal when signedIn
+  • QuestionnaireLink  → opens QuestionnaireDoneModal when hasAnsweredQuestionnaire
+  • OneTimeAccessCTA   → conditional buttons on /landing/packages
+
+Net result: one /access-status request per page load, instead of 3–5.
 ```
 
 ---
@@ -329,7 +341,7 @@ LandingHeader "Sign out" clicked
     No DB write
   ← { ok: true }
   router.push("/")   router.refresh()
-  Cookie deleted — next visit to /landing redirected by proxy.ts
+  Cookie deleted — next visit to /landing redirected by middleware.ts
 ```
 
 ---
@@ -337,7 +349,7 @@ LandingHeader "Sign out" clicked
 ### 5.5 Payment — analysis access
 
 ```
-User is on /landing/packages (auth guaranteed by proxy.ts + AuthGuard)
+User is on /landing/packages (auth guaranteed by middleware.ts + AuthGuard)
 Clicks "Get Access"
 
 Frontend:
