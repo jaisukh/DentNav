@@ -83,6 +83,11 @@ async def delete_stale_unclaimed_for_double_submit(
     When the user already has a claimed analysis but localStorage still points
     to a *second* submission (unclaimed), remove that extra row. Returns True if
     a row was deleted.
+
+    The DELETE is a single statement that only matches rows with ``user_id IS
+    NULL``. If a concurrent request (e.g. OAuth callback in another tab) claims
+    the same analysis between our policy check and the delete, the row no
+    longer matches and the delete is a no-op — we never remove a claimed row.
     """
     if not local_analysis_id or not _ANALYSIS_UUID.match(local_analysis_id):
         return False
@@ -91,12 +96,16 @@ async def delete_stale_unclaimed_for_double_submit(
     )
     if claims.scalar_one_or_none() is None:
         return False
-    local = await get_analysis(session, local_analysis_id)
-    if local is None or local.user_id is not None:
-        return False
-    await session.execute(delete(Analysis).where(Analysis.id == local_analysis_id))
+    result = await session.execute(
+        delete(Analysis).where(
+            Analysis.id == local_analysis_id,
+            Analysis.user_id.is_(None),
+        )
+    )
     await session.commit()
-    return True
+    # 0 / -1 / None: wrong id, already claimed, or already deleted
+    rc = result.rowcount
+    return bool(rc and rc > 0)
 
 
 async def user_has_claimed_analysis(session: AsyncSession, user_id: str) -> bool:

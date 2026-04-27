@@ -39,22 +39,24 @@ export function AnswersPreviewModal({
   useEffect(() => {
     if (!open) return;
     let active = true;
-    queueMicrotask(() => {
-      if (!active) return;
-      setError(null);
-      setData(null);
-      setLoading(true);
-      void fetchMyAnalysisAnswers()
-        .then((payload) => {
-          if (active) setData(payload);
-        })
-        .catch(() => {
-          if (active) setError("We couldn't load your previous response.");
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    });
+    // Clear stale Q&A in the same commit as `open` — deferring to a microtask
+    // let one frame of old data flash on reopen. Async fetch is OK in `.then`
+    // (eslint is fine with setState in promise callbacks, not the effect sync body).
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setError(null);
+    setData(null);
+    setLoading(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    void fetchMyAnalysisAnswers()
+      .then((payload) => {
+        if (active) setData(payload);
+      })
+      .catch(() => {
+        if (active) setError("We couldn't load your previous response.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };

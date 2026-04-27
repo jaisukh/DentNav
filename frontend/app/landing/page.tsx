@@ -54,10 +54,10 @@ export default function LandingPage() {
 
             {/* Live status pill */}
             <div className="inline-flex items-center gap-2 rounded-full border border-dent-sky/25 bg-white/90 px-3 py-1 shadow-[0_6px_18px_-10px_rgba(14,165,233,0.45)]">
-            <span className="relative flex h-2 w-2" aria-hidden>
-  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-dent-sky opacity-75" />
-  <span className="relative inline-flex h-2 w-2 rounded-full bg-dent-sky" />
-</span>
+              <span className="relative flex h-2 w-2" aria-hidden>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-dent-sky opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-dent-sky" />
+              </span>
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-dent-deep">
                 Your licensing dashboard
               </span>

@@ -21,6 +21,10 @@ import { type NextRequest, NextResponse } from "next/server";
  */
 export function middleware(request: NextRequest) {
   const userId = request.cookies.get("dentnav_user_id");
+  // Presence only: Edge cannot verify JWT signature or expiry. Malformed,
+  // expired, or tampered values still have a value here — `AuthGuard` +
+  // `/access-status` validate with the backend; users with a bad cookie may
+  // see a brief flash of the protected shell before redirect.
 
   if (!userId?.value) {
     const loginUrl = new URL("/auth/login", request.url);
