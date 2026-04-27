@@ -17,10 +17,10 @@ from app.services.analysis_store import (
     get_analysis,
     get_latest_analysis_for_user,
 )
-from app.services.user_store import get_user_by_id
 from app.services.answers_validate import validate_answers
 from app.services.questionnaire_load import load_questionnaire_document
 from app.services.session import verify_session_token
+from app.services.user_store import get_user_by_id
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 

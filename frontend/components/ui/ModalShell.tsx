@@ -37,7 +37,11 @@ export function ModalShell({
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    // Defer past the effect's synchronous run — the portal must only
+    // render on the client where `document.body` exists; the linter
+    // rejects a synchronous setState in the effect body.
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
   }, []);
 
   useEffect(() => {

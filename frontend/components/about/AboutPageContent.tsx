@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
 import { SignInLink } from "@/components/auth/SignInLink";
 

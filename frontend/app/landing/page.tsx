@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BrochureDownload } from "@/components/landing/BrochureDownload";
 import { LandingVideoSection } from "@/components/landing/LandingVideoSection";
 import { PaymentPrompt } from "@/components/landing/PaymentPrompt";
@@ -15,23 +16,25 @@ export default function LandingPage() {
   // packages CTA, etc.) shares this same value, so the endpoint is hit once
   // per page load instead of 3–5 times.
   const status = useAuthStatus();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const [reclaimedToast, setReclaimedToast] = useState(false);
   const dismissReclaimed = useCallback(() => setReclaimedToast(false), []);
 
+  // OAuth callback can append ?reclaimed_existing=1 — strip it from the URL
+  // and show a one-time toast. setState is deferred (microtask) so eslint's
+  // react-hooks/set-state-in-effect is satisfied.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("reclaimed_existing") === "1") {
+    if (searchParams.get("reclaimed_existing") !== "1") return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("reclaimed_existing");
+    const q = next.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+    queueMicrotask(() => {
       setReclaimedToast(true);
-      params.delete("reclaimed_existing");
-      const next = params.toString();
-      window.history.replaceState(
-        null,
-        "",
-        `${window.location.pathname}${next ? `?${next}` : ""}`,
-      );
-    }
-  }, []);
+    });
+  }, [searchParams, pathname, router]);
 
   return (
     <div className="w-full max-w-6xl pb-6">

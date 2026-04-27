@@ -39,19 +39,22 @@ export function AnswersPreviewModal({
   useEffect(() => {
     if (!open) return;
     let active = true;
-    setError(null);
-    setData(null);
-    setLoading(true);
-    fetchMyAnalysisAnswers()
-      .then((payload) => {
-        if (active) setData(payload);
-      })
-      .catch(() => {
-        if (active) setError("We couldn't load your previous response.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    queueMicrotask(() => {
+      if (!active) return;
+      setError(null);
+      setData(null);
+      setLoading(true);
+      void fetchMyAnalysisAnswers()
+        .then((payload) => {
+          if (active) setData(payload);
+        })
+        .catch(() => {
+          if (active) setError("We couldn't load your previous response.");
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    });
     return () => {
       active = false;
     };

@@ -6,8 +6,6 @@ import { BrandLogo } from "@/components/home/BrandLogo";
 import { InfoToast } from "@/components/ui/InfoToast";
 import { useAuthStatus } from "@/lib/auth-status-context";
 
-type AuthState = "verifying" | "authenticated" | "failed";
-
 const REDIRECT_DELAY_MS = 2500;
 
 /**
@@ -23,43 +21,39 @@ const REDIRECT_DELAY_MS = 2500;
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const auth = useAuthStatus();
-  const [authState, setAuthState] = useState<AuthState>("verifying");
-  const [dupToast, setDupToast] = useState(false);
-  const dismissDupToast = useCallback(() => setDupToast(false), []);
+  const [staleToastDismissed, setStaleToastDismissed] = useState(false);
+  const dismissDupToast = useCallback(() => setStaleToastDismissed(true), []);
+
+  const showStaleToast =
+    auth.staleQuestionnaireRemoved && !staleToastDismissed;
+
+  // Derive from auth; avoid setState in an effect (eslint react-hooks/set-state-in-effect).
+  const phase: "verifying" | "authenticated" | "failed" = !auth.ready
+    ? "verifying"
+    : auth.signedIn
+      ? "authenticated"
+      : "failed";
 
   useEffect(() => {
-    if (!auth.ready) return;
-
-    if (auth.staleQuestionnaireRemoved) {
-      setDupToast(true);
-    }
-
-    if (auth.signedIn) {
-      setAuthState("authenticated");
-      return;
-    }
-
-    // Cookie present but backend says the session is no longer valid (or the
-    // request errored out and the provider degraded to DEFAULT).
-    setAuthState("failed");
-    const timer = setTimeout(() => {
+    if (phase !== "failed") return;
+    const t = setTimeout(() => {
       router.replace("/auth/login?reason=session_expired");
     }, REDIRECT_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [auth.ready, auth.signedIn, auth.staleQuestionnaireRemoved, router]);
+    return () => clearTimeout(t);
+  }, [phase, router]);
 
-  if (authState === "verifying") {
+  if (phase === "verifying") {
     return <VerifyingScreen />;
   }
 
-  if (authState === "failed") {
+  if (phase === "failed") {
     return <FailedScreen />;
   }
 
   return (
     <>
       <InfoToast
-        open={dupToast}
+        open={showStaleToast}
         onDismiss={dismissDupToast}
         title="One questionnaire only"
         body="You already have a pathway analysis. A second submission was not kept; we only store your first questionnaire."
