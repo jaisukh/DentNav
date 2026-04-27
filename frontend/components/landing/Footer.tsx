@@ -1,5 +1,5 @@
 import { BrandLogo } from "./BrandLogo";
-import Link from "next/link";
+import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
 
 export function Footer() {
   return (
@@ -13,12 +13,11 @@ export function Footer() {
               and practice in the United States. Expertise at every step.
             </p>
             <div className="mt-8">
-              <Link
-                href="/questionnaire"
+              <QuestionnaireLink
                 className="inline-flex items-center justify-center rounded-full bg-dent-ink px-8 py-3.5 text-sm font-bold text-white transition-all hover:bg-dent-deep active:scale-95"
               >
                 Get Started
-              </Link>
+              </QuestionnaireLink>
             </div>
           </div>
 

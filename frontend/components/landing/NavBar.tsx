@@ -1,4 +1,6 @@
 import { BrandLogo } from "./BrandLogo";
+import { SignInLink } from "@/components/auth/SignInLink";
+import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
 import Link from "next/link";
 
 export function NavBar() {
@@ -19,18 +21,12 @@ export function NavBar() {
           >
             About Us
           </Link>
-          <Link
-            href="/auth/login"
-            className="text-center text-sm font-medium leading-5 text-[#3E4850] transition-colors hover:text-dent-ink"
-          >
+          <SignInLink className="text-center text-sm font-medium leading-5 text-[#3E4850] transition-colors hover:text-dent-ink">
             Sign In
-          </Link>
-          <Link
-            href="/questionnaire"
-            className="rounded-full bg-dent-sky px-5 py-2.5 text-sm font-medium leading-5 text-white shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-opacity hover:opacity-90"
-          >
+          </SignInLink>
+          <QuestionnaireLink className="rounded-full bg-dent-sky px-5 py-2.5 text-sm font-medium leading-5 text-white shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-opacity hover:opacity-90">
             Get Started
-          </Link>
+          </QuestionnaireLink>
         </nav>
       </div>
     </header>

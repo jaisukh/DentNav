@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SignInLink } from "@/components/auth/SignInLink";
 
 function TimelineRow() {
   return (
@@ -88,12 +88,11 @@ export function BlurredRoadmapSection() {
               </p>
 
               {/* Primary CTA */}
-              <Link
-                href="/auth/login"
+              <SignInLink
                 className="font-display mt-10 flex h-14 w-full items-center justify-center rounded-full bg-slate-900 text-base font-bold text-white transition-opacity hover:opacity-90"
               >
                 Continue with Google
-              </Link>
+              </SignInLink>
 
               {/* Divider with "OR" */}
               <div className="mt-6 flex w-full items-center gap-4">
@@ -103,12 +102,11 @@ export function BlurredRoadmapSection() {
               </div>
 
               {/* Secondary CTA */}
-              <Link
-                href="/auth/login"
+              <SignInLink
                 className="font-display mt-6 flex h-[60px] w-full items-center justify-center rounded-full border-2 border-slate-200 text-base font-bold text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
               >
                 Sign in
-              </Link>
+              </SignInLink>
 
               {/* Disclaimer */}
               <p className="font-display mt-8 text-center text-xs leading-4 text-slate-400">

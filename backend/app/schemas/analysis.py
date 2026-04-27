@@ -189,8 +189,9 @@ class AnalysisAccessStatusResponse(BaseModel):
     """
     Compact status for landing page gating.
 
-    - hasAnsweredQuestionnaire: whether we have at least one analysis row for the user.
-    - hasPaid: whether the latest claimed analysis is paid.
+    - hasAnsweredQuestionnaire: true when the user row has `has_filled` and/or
+      we have a claimed `analyses` row (legacy / drift).
+    - hasPaid: whether the **latest** claimed analysis (by `created_at`) is paid.
     """
 
     signedIn: bool = False

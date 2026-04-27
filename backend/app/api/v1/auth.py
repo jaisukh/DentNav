@@ -7,11 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.session import get_session
-from app.services.analysis_store import claim_analysis
+from app.services.analysis_store import (
+    claim_analysis,
+    delete_stale_unclaimed_for_double_submit,
+    user_has_claimed_analysis,
+)
 from app.services.auth_google import (
     build_google_oauth_url,
     exchange_google_code_for_token,
-    fetch_google_email,
+    fetch_google_user_info,
     upsert_google_user,
 )
 
@@ -65,9 +69,9 @@ async def google_callback(
     if not settings.has_google_oauth_config:
         raise HTTPException(status_code=500, detail=_oauth_missing)
     try:
-        token = await exchange_google_code_for_token(code)
-        email = await fetch_google_email(token)
-        user_id = await upsert_google_user(session, email, token)
+        access_token = await exchange_google_code_for_token(code)
+        user_info = await fetch_google_user_info(access_token)
+        user_id = await upsert_google_user(session, user_info)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"OAuth callback failed: {exc}") from exc
 
@@ -75,12 +79,25 @@ async def google_callback(
     # this user so we can surface it after payment without asking them to
     # refill the questionnaire.
     analysis_id = _sanitize_analysis_id(state)
+    reclaimed_existing = False
     if analysis_id:
-        await claim_analysis(session, analysis_id, user_id)
+        if await user_has_claimed_analysis(session, user_id):
+            # Existing user re-submitted while signed out; drop the new
+            # unclaimed row instead of stacking it on top of their existing
+            # claimed analysis. The /landing page surfaces a toast for this.
+            removed = await delete_stale_unclaimed_for_double_submit(
+                session, user_id, analysis_id
+            )
+            reclaimed_existing = removed
+        else:
+            await claim_analysis(session, analysis_id, user_id)
 
     # Always land on the dedicated post-sign-in page. How/when to surface the
     # claimed analysis row is a separate product decision (gated by payment).
-    response = RedirectResponse(url=f"{settings.frontend_base_url}/landing")
+    target = f"{settings.frontend_base_url}/landing"
+    if reclaimed_existing:
+        target = f"{target}?reclaimed_existing=1"
+    response = RedirectResponse(url=target)
     secure, samesite = _session_cookie_kwargs()
     response.set_cookie(
         key="dentnav_user_id",

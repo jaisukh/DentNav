@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnalysisView } from "@/components/analysis/AnalysisView";
+import { fetchMyAnalysisPreview } from "@/lib/api/analysis";
 import {
   analysisHandoffStorageKey,
   clearAnalysisResultFromSession,
@@ -18,6 +19,8 @@ export default function AnalysisPage() {
 
     const params = new URLSearchParams(window.location.search);
     const handoffId = params.get("h");
+    const fromServer = params.get("source") === "server";
+
     if (handoffId) {
       const raw = sessionStorage.getItem(analysisHandoffStorageKey(handoffId));
       if (raw) {
@@ -57,12 +60,38 @@ export default function AnalysisPage() {
       };
     }
 
+    // No client-side handoff. Fall back to the server preview when the user
+    // is signed in and has a stored analysis. This is what the
+    // QuestionnaireDoneModal -> "Preview your analysis" entrypoint relies on.
+    if (fromServer || !handoffId) {
+      fetchMyAnalysisPreview()
+        .then((payload) => {
+          if (!cancelled) {
+            setData(payload);
+            if (
+              window.location.pathname === "/analysis" &&
+              window.location.search.length > 0
+            ) {
+              window.history.replaceState(null, "", "/analysis");
+            }
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setError(
+              "No analysis on file. Please complete the questionnaire to generate one.",
+            );
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     queueMicrotask(() => {
       if (!cancelled) {
         setError(
-          handoffId
-            ? "We couldn't load your results. The server request may have failed, or storage was unavailable. Please return to the questionnaire and try again."
-            : "No analysis to display. Please complete the questionnaire.",
+          "We couldn't load your results. Please return to the questionnaire and try again.",
         );
       }
     });

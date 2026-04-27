@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
 
 export function CtaSection() {
   return (
@@ -25,13 +25,12 @@ export function CtaSection() {
           <div className="flex w-full flex-col items-center justify-center gap-4 sm:flex-row">
           <span className="relative inline-flex rounded-full">
               <span className="dentnav-cta-primary__halo rounded-full" aria-hidden />
-              <Link
-                href="/questionnaire"
+              <QuestionnaireLink
                 className="dentnav-cta-primary relative z-[1] inline-flex items-center justify-center rounded-full bg-[linear-gradient(99.11deg,#006591_0%,#0EA5E9_100%)] px-10 py-5 text-base font-bold leading-6 text-white transition-all duration-300 hover:-translate-y-1 hover:brightness-110 active:scale-[0.98]"
               >
                 <span className="dentnav-cta-primary__shine" aria-hidden />
                 <span className="relative z-[1]">Unlock Your Custom Plan</span>
-              </Link>
+              </QuestionnaireLink>
             </span>
             <a
               href="#expert"

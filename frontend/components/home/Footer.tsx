@@ -1,5 +1,5 @@
 import { BrandLogo } from "./BrandLogo";
-import Link from "next/link";
+import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
 
 export type FooterProps = {
   /** `full` includes Get Started. `compact` is the same layout minus that CTA (for signed-in landing). */
@@ -20,14 +20,13 @@ export function Footer({ variant = "full" }: FooterProps) {
               United States. Expertise at every step.
             </p>
             {showGetStarted ? (
-              <div className="mt-8">
-                <Link
-                  href="/questionnaire"
-                  className="inline-flex items-center justify-center rounded-full bg-dent-ink px-8 py-3.5 text-sm font-bold text-white transition-all hover:bg-dent-deep active:scale-95"
-                >
-                  Get Started
-                </Link>
-              </div>
+            <div className="mt-8">
+              <QuestionnaireLink
+                className="inline-flex items-center justify-center rounded-full bg-dent-ink px-8 py-3.5 text-sm font-bold text-white transition-all hover:bg-dent-deep active:scale-95"
+              >
+                Get Started
+              </QuestionnaireLink>
+            </div>
             ) : null}
           </div>
 

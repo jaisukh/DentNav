@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
+import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
 import Cubes from "./Cubes";
 import DotGrid from "./DotGrid";
 
@@ -220,8 +220,7 @@ export function HeroSection() {
               <div className="flex flex-col gap-[11px]">
                 <span className="relative inline-flex w-full rounded-full">
                   <span className="dentnav-cta-primary__halo rounded-full" aria-hidden />
-                  <Link
-                    href="/questionnaire"
+                  <QuestionnaireLink
                     className="dentnav-cta-primary group relative z-[1] inline-flex w-full items-center justify-center gap-2 rounded-full bg-[linear-gradient(98.5deg,#006591_0%,#0EA5E9_100%)] px-8 py-5 text-lg font-bold leading-7 text-white transition-all duration-300 hover:-translate-y-1 hover:brightness-110 active:scale-[0.98]"
                   >
                     <span className="dentnav-cta-primary__shine" aria-hidden />
@@ -232,7 +231,7 @@ export function HeroSection() {
                     >
                       →
                     </span>
-                  </Link>
+                  </QuestionnaireLink>
                 </span>
                 <p className="px-4 text-center text-[13px] font-normal leading-5 text-[#94A3B8] sm:px-12 md:px-20">
                   Answer a quick questionnaire to know where you stand

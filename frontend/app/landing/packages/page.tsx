@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { OneTimeAccessCTA } from "@/components/landing/OneTimeAccessCTA";
 
 // ─── Shared micro-icons ───────────────────────────────────────────────────────
 
@@ -124,20 +125,6 @@ function IconMap() {
         strokeLinejoin="round"
       />
       <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="1.75" />
-    </svg>
-  );
-}
-
-function IconAnalysis() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden>
-      <path
-        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </svg>
   );
 }
@@ -502,43 +489,8 @@ export default function LandingPackagesPage() {
               </ul>
             </div>
 
-            {/* Right: CTA panel */}
-            <div className="flex flex-col items-center justify-center text-center lg:pl-12">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-[#7DD3FC] ring-1 ring-white/15">
-                <IconAnalysis />
-              </div>
-
-              <p className="mt-5 font-display text-lg font-bold text-white">
-                Your analysis is ready
-              </p>
-              <p className="mt-2 text-sm leading-relaxed text-white/60">
-                Single purchase — permanent access to your personalised roadmap.
-              </p>
-
-              <div className="mt-8 flex w-full flex-col gap-3">
-                <Link
-                  href="/landing/packages#checkout"
-                  className="dentnav-cta-primary group relative flex w-full items-center justify-center gap-2.5 rounded-xl bg-dent-sky py-3.5 text-sm font-bold text-white"
-                >
-                  <span className="dentnav-cta-primary__halo" aria-hidden />
-                  <span className="dentnav-cta-primary__shine" aria-hidden />
-                  <span className="relative z-10 flex items-center gap-2.5">
-                    Get access
-                    <Arrow className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                  </span>
-                </Link>
-                <Link
-                  href="/questionnaire"
-                  className="flex w-full items-center justify-center rounded-xl border border-white/15 py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/30 hover:text-white"
-                >
-                  Review your questionnaire first
-                </Link>
-              </div>
-
-              <p className="mt-5 text-[11px] text-white/40">
-                Complete the questionnaire to generate your analysis
-              </p>
-            </div>
+            {/* Right: CTA panel — state-aware (filled / paid / not filled). */}
+            <OneTimeAccessCTA />
           </div>
         </div>
       </section>

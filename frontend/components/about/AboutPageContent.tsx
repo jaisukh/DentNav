@@ -1,5 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
+import { SignInLink } from "@/components/auth/SignInLink";
 
 // ─── Types & data ─────────────────────────────────────────────────────────────
 
@@ -320,21 +322,19 @@ export function AboutPageContent({ secondaryCta }: AboutPageContentProps) {
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3 sm:mt-10">
               <span className="relative inline-flex rounded-full">
                 <span className="dentnav-cta-primary__halo rounded-full" aria-hidden />
-                <Link
-                  href="/questionnaire"
+                <QuestionnaireLink
                   className="dentnav-cta-primary relative z-[1] inline-flex items-center justify-center rounded-full bg-[linear-gradient(99.11deg,#006591_0%,#0EA5E9_100%)] px-7 py-3 text-sm font-bold leading-5 text-white shadow-[0_10px_24px_-14px_rgba(0,101,145,0.8)] transition-all duration-300 hover:-translate-y-1 hover:brightness-110 active:scale-[0.98]"
                 >
                   <span className="dentnav-cta-primary__shine" aria-hidden />
                   <span className="relative z-[1]">Start Your Guidance Plan</span>
-                </Link>
+                </QuestionnaireLink>
               </span>
               {secondaryCta ?? (
-                <Link
-                  href="/auth/login"
+                <SignInLink
                   className="inline-flex items-center justify-center rounded-full border border-[#BAE6FD] bg-white px-7 py-3 text-sm font-bold text-[#0C4A6E] transition-all hover:border-[#7DD3FC] hover:bg-[#F0F9FF]"
                 >
                   Talk to DentNav
-                </Link>
+                </SignInLink>
               )}
             </div>
           </div>

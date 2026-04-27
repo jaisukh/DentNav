@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BrochureDownload } from "@/components/landing/BrochureDownload";
 import { LandingVideoSection } from "@/components/landing/LandingVideoSection";
 import { PaymentPrompt } from "@/components/landing/PaymentPrompt";
 import { QuestionnairePrompt } from "@/components/landing/QuestionnairePrompt";
 import { ViewAnalysis } from "@/components/landing/ViewAnalysis";
+import { InfoToast } from "@/components/ui/InfoToast";
 import {
   type LandingAccessStatus,
+  applyStaleRemovalSync,
   fetchLandingAccessStatus,
+  toLandingStatus,
 } from "@/lib/api/landing";
 
 const DEFAULT_STATUS: LandingAccessStatus = {
@@ -21,13 +24,33 @@ const DEFAULT_STATUS: LandingAccessStatus = {
 export default function LandingPage() {
   const [status, setStatus] = useState<LandingAccessStatus>(DEFAULT_STATUS);
   const [loading, setLoading] = useState(true);
+  const [reclaimedToast, setReclaimedToast] = useState(false);
+  const dismissReclaimed = useCallback(() => setReclaimedToast(false), []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reclaimed_existing") === "1") {
+      setReclaimedToast(true);
+      params.delete("reclaimed_existing");
+      const next = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${next ? `?${next}` : ""}`,
+      );
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
     async function loadStatus() {
       try {
         const next = await fetchLandingAccessStatus();
-        if (active) setStatus(next);
+        if (active) {
+          applyStaleRemovalSync(next);
+          setStatus(toLandingStatus(next));
+        }
       } catch {
         if (active) setStatus(DEFAULT_STATUS);
       } finally {
@@ -42,6 +65,14 @@ export default function LandingPage() {
 
   return (
     <div className="w-full max-w-6xl pb-6">
+      <InfoToast
+        open={reclaimedToast}
+        onDismiss={dismissReclaimed}
+        title="You're viewing your previous response"
+        body="We kept the analysis already on your account and dropped the new submission. Only one questionnaire is stored per user."
+        tone="sky"
+      />
+
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <header className="mb-6">
@@ -50,16 +81,17 @@ export default function LandingPage() {
 
             {/* Live status pill */}
             <div className="inline-flex items-center gap-2 rounded-full border border-dent-sky/25 bg-white/90 px-3 py-1 shadow-[0_6px_18px_-10px_rgba(14,165,233,0.45)]">
-              <span className="relative flex h-2 w-2" aria-hidden>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-dent-sky" />
-              </span>
+            <span className="relative flex h-2 w-2" aria-hidden>
+  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-dent-sky opacity-75" />
+  <span className="relative inline-flex h-2 w-2 rounded-full bg-dent-sky" />
+</span>
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-dent-deep">
                 Your licensing dashboard
               </span>
             </div>
 
             <h1 className="mt-4 font-display text-3xl font-bold tracking-tight text-dent-ink sm:text-[2.5rem] sm:leading-[1.08]">
-              Welcome back —{" "}
+              Welcome —{" "}
               <span className="bg-gradient-to-r from-dent-deep via-dent-sky to-[#38BDF8] bg-clip-text text-transparent">
                 your U.S. licensing roadmap
               </span>{" "}

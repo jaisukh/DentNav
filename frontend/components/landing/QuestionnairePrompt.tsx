@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
 import { LandingPromptCard } from "@/components/landing/LandingPromptCard";
 
 /**
@@ -32,8 +32,7 @@ export function QuestionnairePrompt() {
         </svg>
       }
     >
-      <Link
-        href="/questionnaire"
+      <QuestionnaireLink
         className="group inline-flex items-center gap-2.5 rounded-full border border-[#E2E8F0] bg-white px-8 py-3.5 text-sm font-bold text-dent-ink shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-200 hover:border-dent-sky/40 hover:bg-dent-badge-bg/50 active:scale-[0.98]"
       >
         <span>Start questionnaire</span>
@@ -45,7 +44,7 @@ export function QuestionnairePrompt() {
         >
           <path d="M3.33 8h9.34M8.67 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-      </Link>
+      </QuestionnaireLink>
     </LandingPromptCard>
   );
 }

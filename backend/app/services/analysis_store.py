@@ -7,13 +7,20 @@ The questionnaire submit endpoint stores the row and returns only a preview
 slice so the unpaid frontend (and anyone watching the network tab) can never
 see the full body / pathway / risks / timeline.
 """
+import re
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.analysis import Analysis
+from app.models.user import User
+
+_ANALYSIS_UUID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 
 def _profile_field(payload: dict[str, Any], key: str, fallback: str = "") -> str:
@@ -54,6 +61,11 @@ async def create_analysis(
         payload=payload,
     )
     session.add(analysis)
+    if user_id is not None:
+        result = await session.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user is not None:
+            user.has_filled = True
     await session.commit()
     await session.refresh(analysis)
     return analysis
@@ -62,6 +74,37 @@ async def create_analysis(
 async def get_analysis(session: AsyncSession, analysis_id: str) -> Analysis | None:
     result = await session.execute(select(Analysis).where(Analysis.id == analysis_id))
     return result.scalar_one_or_none()
+
+
+async def delete_stale_unclaimed_for_double_submit(
+    session: AsyncSession, user_id: str, local_analysis_id: str | None
+) -> bool:
+    """
+    When the user already has a claimed analysis but localStorage still points
+    to a *second* submission (unclaimed), remove that extra row. Returns True if
+    a row was deleted.
+    """
+    if not local_analysis_id or not _ANALYSIS_UUID.match(local_analysis_id):
+        return False
+    claims = await session.execute(
+        select(Analysis.id).where(Analysis.user_id == user_id).limit(1)
+    )
+    if claims.scalar_one_or_none() is None:
+        return False
+    local = await get_analysis(session, local_analysis_id)
+    if local is None or local.user_id is not None:
+        return False
+    await session.execute(delete(Analysis).where(Analysis.id == local_analysis_id))
+    await session.commit()
+    return True
+
+
+async def user_has_claimed_analysis(session: AsyncSession, user_id: str) -> bool:
+    """True when the user already has at least one analysis row attached."""
+    result = await session.execute(
+        select(Analysis.id).where(Analysis.user_id == user_id).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def get_latest_analysis_for_user(
@@ -85,6 +128,10 @@ async def claim_analysis(
         return None
     if analysis.user_id is None:
         analysis.user_id = user_id
+        result = await session.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user is not None:
+            user.has_filled = True
         await session.commit()
         await session.refresh(analysis)
     return analysis

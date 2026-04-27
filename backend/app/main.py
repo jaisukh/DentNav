@@ -31,6 +31,7 @@ _cors_kwargs = {
     "allow_credentials": True,
     "allow_methods": ["*"],
     "allow_headers": ["*"],
+    "expose_headers": ["X-Removed-Stale-Questionnaire"],
 }
 app.add_middleware(CORSMiddleware, **_cors_kwargs)
 

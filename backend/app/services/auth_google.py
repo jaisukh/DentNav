@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 from urllib.parse import urlencode
 
 import httpx
@@ -49,7 +50,20 @@ async def exchange_google_code_for_token(code: str) -> str:
         return access_token
 
 
-async def fetch_google_email(access_token: str) -> str:
+@dataclass(frozen=True, slots=True)
+class GoogleUserInfo:
+    email: str
+    first_name: str
+    last_name: str
+
+
+async def fetch_google_user_info(access_token: str) -> GoogleUserInfo:
+    """
+    Fetches the signed-in user from Google. `given_name` and `family_name` are
+    available when the token was issued with the `profile` scope (included in
+    GOOGLE_OAUTH_SCOPE). Some Google accounts return only a display `name` — we
+    fall back to empty strings for missing name parts; email is still required.
+    """
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.get(
             GOOGLE_USERINFO_ENDPOINT,
@@ -58,19 +72,45 @@ async def fetch_google_email(access_token: str) -> str:
         response.raise_for_status()
         payload = response.json()
         email = payload.get("email", "")
-        if not email:
+        if not email or not isinstance(email, str):
             raise ValueError("Google userinfo returned no email")
-        return email
+
+        first = payload.get("given_name")
+        last = payload.get("family_name")
+        if isinstance(first, str) and first.strip():
+            first_name = first.strip()
+        else:
+            # Rare: only `name` is present; put everything in first_name
+            name = payload.get("name")
+            if isinstance(name, str) and name.strip():
+                first_name = name.strip()
+            else:
+                first_name = ""
+        if isinstance(last, str) and last.strip():
+            last_name = last.strip()
+        else:
+            last_name = ""
+
+    return GoogleUserInfo(email=email, first_name=first_name, last_name=last_name)
 
 
-async def upsert_google_user(session: AsyncSession, email: str, token: str) -> str:
-    """Insert or update the user row for this Google email. Returns the user id."""
-    result = await session.execute(select(User).where(User.email == email))
+async def upsert_google_user(
+    session: AsyncSession, info: GoogleUserInfo
+) -> str:
+    """Insert or update the user row for this Google account. Returns user id."""
+    result = await session.execute(select(User).where(User.email == info.email))
     user = result.scalar_one_or_none()
     if user:
-        user.token = token
+        user.first_name = info.first_name
+        user.last_name = info.last_name
     else:
-        user = User(id=str(uuid.uuid4()), email=email, token=token)
+        user = User(
+            id=str(uuid.uuid4()),
+            email=info.email,
+            first_name=info.first_name,
+            last_name=info.last_name,
+            has_filled=False,
+        )
         session.add(user)
     await session.commit()
     await session.refresh(user)
