@@ -3,6 +3,7 @@
 import {
   type ReactNode,
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -22,7 +23,24 @@ export type AuthStatus = LandingAccessStatus & {
   staleQuestionnaireRemoved: boolean;
 };
 
-const DEFAULT: AuthStatus = {
+export type AuthStatusContextValue = AuthStatus & {
+  /**
+   * Re-fetch /access-status from the backend and update every consumer.
+   * Call this any time we know the cookie state may have changed
+   * (sign-out, the analysis-claim redirect after OAuth callback, etc.).
+   */
+  refresh: () => Promise<void>;
+  /**
+   * Optimistic local clear — flip every consumer to "signed out" without
+   * waiting for a network round-trip. The backend is still the source of
+   * truth on the next refresh, but this avoids the brief window where the
+   * cookie is gone but stale `signedIn: true` is still in memory after a
+   * client-side sign-out.
+   */
+  clear: () => void;
+};
+
+const DEFAULT_AUTH: AuthStatus = {
   signedIn: false,
   hasAnsweredQuestionnaire: false,
   hasPaid: false,
@@ -32,7 +50,13 @@ const DEFAULT: AuthStatus = {
   staleQuestionnaireRemoved: false,
 };
 
-const AuthStatusContext = createContext<AuthStatus | null>(null);
+const DEFAULT_VALUE: AuthStatusContextValue = {
+  ...DEFAULT_AUTH,
+  refresh: async () => {},
+  clear: () => {},
+};
+
+const AuthStatusContext = createContext<AuthStatusContextValue | null>(null);
 
 /**
  * Provider that performs a single `/access-status` fetch on mount and shares
@@ -41,11 +65,44 @@ const AuthStatusContext = createContext<AuthStatus | null>(null);
  * Wrap once near the root of the app (in `app/layout.tsx`) so that all of
  * `<SignInLink>`, `<QuestionnaireLink>`, `<OneTimeAccessCTA>`, the navbar
  * components, and the AuthGuard share the same network request instead of
- * each issuing their own. Without this, a typical /landing page load would
- * hit `/access-status` 3–5 times concurrently.
+ * each issuing their own.
+ *
+ * The provider lives in the root layout, which means it survives
+ * client-side navigation. Components that mutate the auth state
+ * (sign-out, OAuth callback redirect) must call `refresh()` on the
+ * returned context — otherwise the cached `signedIn: true` from a
+ * previous session would persist in memory after the cookie is cleared.
  */
 export function AuthStatusProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthStatus>(DEFAULT);
+  const [state, setState] = useState<AuthStatus>(DEFAULT_AUTH);
+
+  const refresh = useCallback(async () => {
+    try {
+      const result = await fetchLandingAccessStatus();
+      applyStaleRemovalSync(result);
+      const status = toLandingStatus(result);
+      setState({
+        ...status,
+        loading: false,
+        ready: true,
+        staleQuestionnaireRemoved: result.staleQuestionnaireRemoved,
+      });
+    } catch {
+      setState({
+        ...DEFAULT_AUTH,
+        loading: false,
+        ready: true,
+      });
+    }
+  }, []);
+
+  const clear = useCallback(() => {
+    setState({
+      ...DEFAULT_AUTH,
+      loading: false,
+      ready: true,
+    });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -64,7 +121,7 @@ export function AuthStatusProvider({ children }: { children: ReactNode }) {
       } catch {
         if (!active) return;
         setState({
-          ...DEFAULT,
+          ...DEFAULT_AUTH,
           loading: false,
           ready: true,
         });
@@ -75,20 +132,23 @@ export function AuthStatusProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const value: AuthStatusContextValue = { ...state, refresh, clear };
+
   return (
-    <AuthStatusContext.Provider value={state}>
+    <AuthStatusContext.Provider value={value}>
       {children}
     </AuthStatusContext.Provider>
   );
 }
 
 /**
- * Read the current auth status. Must be used inside `<AuthStatusProvider>`.
- * If no provider is mounted (e.g. an isolated test, or an island that escapes
- * the root layout) we degrade gracefully to the DEFAULT value rather than
- * throwing — this keeps marketing-only pages safe.
+ * Read the current auth status (and refresh/clear actions). Must be used
+ * inside `<AuthStatusProvider>`. If no provider is mounted (e.g. an
+ * isolated test, or an island that escapes the root layout) we degrade
+ * gracefully to the DEFAULT value rather than throwing — this keeps
+ * marketing-only pages safe.
  */
-export function useAuthStatus(): AuthStatus {
+export function useAuthStatus(): AuthStatusContextValue {
   const ctx = useContext(AuthStatusContext);
-  return ctx ?? DEFAULT;
+  return ctx ?? DEFAULT_VALUE;
 }

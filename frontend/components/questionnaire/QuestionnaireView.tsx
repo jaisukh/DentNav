@@ -7,6 +7,7 @@ import { NavBar } from "@/components/home/NavBar";
 import { analysisHandoffStorageKey, storeAnalysisResult } from "@/lib/analysis-session";
 import { fetchQuestionnaire } from "@/lib/api/questionnaire";
 import { submitAnalysis } from "@/lib/api/analysis";
+import { useAuthStatus } from "@/lib/auth-status-context";
 import type { AnswerValue, Question, QuestionnaireDocument } from "@/lib/questionnaire.types";
 import { QuestionnaireField } from "./QuestionnaireField";
 
@@ -36,6 +37,7 @@ function isAnswerComplete(
 
 export function QuestionnaireView() {
   const router = useRouter();
+  const { refresh: refreshAuth } = useAuthStatus();
   const [doc, setDoc] = useState<QuestionnaireDocument | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
@@ -117,6 +119,12 @@ export function QuestionnaireView() {
         /* quota — SESSION_KEY in storeAnalysisResult may still succeed */
       }
       storeAnalysisResult(payload);
+      // If the submitter was already signed in, the backend just flipped
+      // users.has_filled and claimed the analysis row to them. Refresh the
+      // shared auth status so subsequent navigations (navbar Sign In /
+      // Get Started buttons, /landing/packages CTA) see the new state
+      // instead of the cached `hasAnsweredQuestionnaire: false`.
+      void refreshAuth();
       router.push(`/analysis?h=${encodeURIComponent(handoffId)}`);
     } catch (err) {
       setSubmitting(false);
