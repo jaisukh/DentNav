@@ -17,7 +17,7 @@
 | Database | PostgreSQL 16 · SQLAlchemy 2 async · Alembic |
 | Auth | Google OAuth 2.0 (backend-side redirect, signed JWT in httpOnly cookie, CSRF nonce on `state`) |
 | CORS | `expose_headers` includes `X-Removed-Stale-Questionnaire` (read by the Next app) |
-| Payments | Stripe Checkout (one-time, hosted page) — _integration pending_ |
+| Payments | Razorpay (JS popup, HMAC verification) — _integration pending_ |
 | AI | OpenAI (GPT-4o) |
 | Storage | AWS S3 (questionnaire JSON) with local-file fallback |
 
@@ -103,11 +103,18 @@ navigation between `/landing`, `/landing/packages`, and `/landing/about`.
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | VARCHAR(36) PK | UUID |
-| `email` | VARCHAR(320) UNIQUE | Google account email |
-| `token` | TEXT | Google OAuth access token |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | |
+| `id` | VARCHAR(36) PK | UUID v4 |
+| `email` | VARCHAR(320) UNIQUE NOT NULL | Google account email |
+| `first_name` | VARCHAR(120) NOT NULL | Default `''` — populated from Google userinfo |
+| `last_name` | VARCHAR(120) NOT NULL | Default `''` — populated from Google userinfo |
+| `has_filled` | BOOLEAN NOT NULL | Set `true` when analysis is claimed to this user |
+| `created_at` | TIMESTAMPTZ NOT NULL | |
+| `updated_at` | TIMESTAMPTZ NOT NULL | |
+
+> The `token` column (Google OAuth access token) existed in migration 0001 and
+> was dropped in migration 0003. Tokens are no longer persisted — the session
+> is managed via a signed JWT cookie (`dentnav_user_id`) issued at OAuth
+> callback time.
 
 ### `analyses`
 
@@ -131,59 +138,85 @@ navigation between `/landing`, `/landing/packages`, and `/landing/about`.
 > can be claimed later via the OAuth callback `state` param. See §7 for
 > edge cases when `localStorage` and multiple rows diverge.
 
-### `payments` _(new — migration 0003)_
+### `services` _(new — migration 0004)_
+
+Single source of truth for every purchasable product. Seeded once; prices and
+Calendly event UUIDs updated in-place — no redeploy needed.
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | VARCHAR(36) PK | UUID |
+| `id` | VARCHAR(36) PK | UUID v4 |
+| `slug` | VARCHAR(100) UNIQUE NOT NULL | `analysis_access`, `consultation_visa`, … |
+| `name` | VARCHAR(255) NOT NULL | Display name shown in the UI |
+| `description` | TEXT NOT NULL DEFAULT `''` | |
+| `category` | VARCHAR(50) NOT NULL | `analysis` \| `consultation` |
+| `duration_minutes` | INTEGER | NULL for `analysis` category |
+| `amount` | INTEGER NOT NULL | Price in the currency's minor unit (e.g. cents for USD) — never a float |
+| `currency` | VARCHAR(10) NOT NULL DEFAULT `'usd'` | |
+| `calendly_event_type_uuid` | VARCHAR(255) | NULL for `analysis` category |
+| `is_active` | BOOLEAN NOT NULL DEFAULT `true` | Soft-disable without deleting |
+| `created_at` | TIMESTAMPTZ NOT NULL | |
+| `updated_at` | TIMESTAMPTZ NOT NULL | |
+
+### `payments` _(new — migration 0005)_
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | VARCHAR(36) PK | UUID v4 |
 | `user_id` | VARCHAR(36) FK → users NOT NULL | Must be signed in to pay |
-| `product_type` | VARCHAR(100) NOT NULL | See product catalogue below |
-| `reference_id` | VARCHAR(36) | `analyses.id` for `analysis_access` · `bookings.id` for consultations |
-| `stripe_checkout_session_id` | VARCHAR(255) UNIQUE NOT NULL | Set at checkout creation |
-| `stripe_payment_intent_id` | VARCHAR(255) UNIQUE | NULL until webhook confirms |
-| `stripe_price_id` | VARCHAR(255) | Stripe Price object used — audit trail |
-| `stripe_event_id` | VARCHAR(255) | `evt_…` stored for webhook idempotency |
-| `amount_cents` | INTEGER NOT NULL | Minor units — never a float |
-| `currency` | VARCHAR(10) DEFAULT 'usd' | |
-| `status` | VARCHAR(50) DEFAULT 'pending' | `pending \| succeeded \| failed \| expired \| refunded` |
-| `metadata` | JSONB DEFAULT '{}' | Product-specific extras |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | |
+| `service_id` | VARCHAR(36) FK → services NOT NULL | Which service was purchased |
+| `reference_id` | VARCHAR(36) | `analyses.id` for `analysis` · `bookings.id` for consultations |
+| `razorpay_order_id` | VARCHAR(255) UNIQUE NOT NULL | `order_ABC` — set at order creation |
+| `razorpay_payment_id` | VARCHAR(255) UNIQUE | `pay_XYZ` — set after verification |
+| `razorpay_signature` | VARCHAR(512) | HMAC-SHA256 signature — audit trail |
+| `amount` | INTEGER NOT NULL | Snapshot of price at time of payment |
+| `currency` | VARCHAR(10) NOT NULL DEFAULT `'usd'` | Snapshot from `services.currency` |
+| `status` | VARCHAR(50) NOT NULL DEFAULT `'pending'` | `pending \| succeeded \| failed \| expired \| refunded` |
+| `metadata` | JSONB NOT NULL DEFAULT `'{}'` | Error codes, refund reason, etc. |
+| `created_at` | TIMESTAMPTZ NOT NULL | |
+| `updated_at` | TIMESTAMPTZ NOT NULL | |
 
 ```sql
--- Prevents a second successful charge for the same analysis at the DB level
 CREATE UNIQUE INDEX uq_payments_analysis_succeeded
   ON payments (reference_id)
-  WHERE product_type = 'analysis_access' AND status = 'succeeded';
+  WHERE service_id = (SELECT id FROM services WHERE slug = 'analysis_access')
+    AND status = 'succeeded';
 ```
 
-### `bookings` _(new — migration 0004, consultation products only)_
+### `bookings` _(new — migration 0006, consultation services only)_
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | VARCHAR(36) PK | UUID |
+| `id` | VARCHAR(36) PK | UUID v4 |
 | `user_id` | VARCHAR(36) FK → users NOT NULL | |
-| `payment_id` | VARCHAR(36) FK → payments | NULL until payment confirmed |
-| `consultation_type` | VARCHAR(100) NOT NULL | `introductory \| visa \| interview \| cv_sop \| caapid \| license` |
-| `duration_minutes` | INTEGER NOT NULL | |
-| `status` | VARCHAR(50) DEFAULT 'pending_payment' | `pending_payment \| confirmed \| completed \| cancelled \| no_show` |
-| `scheduled_at` | TIMESTAMPTZ | Set when calendar slot is booked |
-| `cal_event_id` | VARCHAR(255) | Cal.com / Calendly event ID |
+| `service_id` | VARCHAR(36) FK → services NOT NULL | Determines duration + Calendly event type |
+| `payment_id` | VARCHAR(36) FK → payments | NULL until payment succeeds |
+| `status` | VARCHAR(50) NOT NULL DEFAULT `'pending_payment'` | `pending_payment \| confirmed \| completed \| cancelled \| no_show` |
+| `slot_time` | TIMESTAMPTZ | Slot chosen by user (soft-locked in Redis before payment) |
+| `slot_expires_at` | TIMESTAMPTZ | `slot_time + 15 min` — hard DB deadline |
+| `scheduled_at` | TIMESTAMPTZ | Set by Calendly after event confirmed |
+| `calendly_event_id` | VARCHAR(255) | Calendly event UUID |
+| `calendly_invitee_url` | TEXT | Calendly invitee link for cancellations |
 | `notes` | TEXT | Internal prep notes |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | |
+| `created_at` | TIMESTAMPTZ NOT NULL | |
+| `updated_at` | TIMESTAMPTZ NOT NULL | |
 
-### Product type catalogue
+> `duration_minutes` and `calendly_event_type_uuid` are read from `services`
+> at booking time — not stored on `bookings` directly.
 
-| `product_type` | Stripe price env var | `reference_id` table |
-|---|---|---|
-| `analysis_access` | `STRIPE_PRICE_ANALYSIS_ACCESS` | `analyses` |
-| `consultation_introductory` | `STRIPE_PRICE_CONSULTATION_INTRODUCTORY` | `bookings` |
-| `consultation_visa` | `STRIPE_PRICE_CONSULTATION_VISA` | `bookings` |
-| `consultation_interview` | `STRIPE_PRICE_CONSULTATION_INTERVIEW` | `bookings` |
-| `consultation_cv_sop` | `STRIPE_PRICE_CONSULTATION_CV_SOP` | `bookings` |
-| `consultation_caapid` | `STRIPE_PRICE_CONSULTATION_CAAPID` | `bookings` |
-| `consultation_license` | `STRIPE_PRICE_CONSULTATION_LICENSE` | `bookings` |
+### Product catalogue
+
+| `services.slug` | `category` | `duration_minutes` | `reference_id` table |
+|---|---|---|---|
+| `analysis_access` | `analysis` | — | `analyses` |
+| `consultation_introductory` | `consultation` | 45 | `bookings` |
+| `consultation_visa` | `consultation` | 60 | `bookings` |
+| `consultation_interview` | `consultation` | 60 | `bookings` |
+| `consultation_cv_sop` | `consultation` | 60 | `bookings` |
+| `consultation_caapid` | `consultation` | 60 | `bookings` |
+| `consultation_license` | `consultation` | 60 | `bookings` |
+
+> Prices and Calendly event UUIDs are stored as rows in `services`, not as env vars.
 
 ---
 
@@ -259,44 +292,63 @@ router.push("/analysis?h={handoffId}")
 ### 5.2 Google sign-in with analysis claim
 
 `getGoogleSignInUrl()` reads `localStorage["dentnav:analysis-id"]` and
-appends it as `?analysis_id=` to the backend OAuth login URL. This
-round-trips through Google as the OAuth `state` parameter.
+appends it as `?analysis_id=` to the backend OAuth login URL.
 
 ```
 GET /api/v1/auth/google/login?analysis_id={id}
-  FastAPI: state = analysisId
-  302 → https://accounts.google.com/o/oauth2/v2/auth?...&state={analysisId}
-  (prompt: "consent" — Google always shows the consent screen)
+
+  FastAPI:
+    1. Generates CSRF nonce via generate_csrf_nonce()
+    2. Sets cookie: oauth_nonce={nonce}  (httpOnly, 5 min, path=/callback)
+    3. If analysis_id is a valid UUID:
+         Sets cookie: oauth_analysis_id={id}  (httpOnly, 5 min, path=/callback)
+         ← analysis_id never goes to Google; it stays server-side in the cookie
+    4. 302 → https://accounts.google.com/o/oauth2/v2/auth?...&state={nonce}
+       (state = CSRF nonce only, NOT the analysis_id)
 
   User approves
 
-GET /api/v1/auth/google/callback?code=…&state={analysisId}
+GET /api/v1/auth/google/callback?code=…&state={nonce}
 ```
 
+> **Why a cookie instead of `state`:** Passing `analysis_id` through the
+> OAuth `state` round-trip (frontend → Google → backend) would expose it in
+> browser history and referrer headers. Storing it in an httpOnly path-scoped
+> cookie keeps it server-side and burns it immediately after the callback.
+
 **FastAPI callback processing:**
-1. `POST https://oauth2.googleapis.com/token` → `access_token`
-2. `GET  https://openidconnect.googleapis.com/v1/userinfo` → `email`
-3. `upsert_google_user(email, token)` → stable `user_id`
-4. `claim_analysis(analysisId, user_id)` → links analysis to user
-5. Sets `dentnav_user_id` cookie, redirects to `/landing`
+1. Verifies CSRF: `state` query param must match `oauth_nonce` cookie → 400 if mismatch
+2. `POST https://oauth2.googleapis.com/token` → `access_token`
+3. `GET  https://openidconnect.googleapis.com/v1/userinfo` → `email`, `given_name`, `family_name`
+4. Upsert user → stable `user_id`
+5. Reads `oauth_analysis_id` cookie:
+   - If user **already has a claimed analysis**: `delete_stale_unclaimed_for_double_submit()` → drops the new row → redirect to `/landing?reclaimed_existing=1`
+   - If user **has no claimed analysis yet**: `claim_analysis(analysisId, user_id)` → links row to user
+6. Burns short-lived cookies (`oauth_nonce`, `oauth_analysis_id`)
+7. Sets `dentnav_user_id` cookie, redirects to `/landing`
 
 **DB writes:**
 ```
 -- First sign-in:
-INSERT users (id=new UUID, email, token)
+INSERT users (id=new UUID, email, first_name, last_name, has_filled=false)
 
 -- Return visit:
-UPDATE users SET token=…, updated_at=now() WHERE email=…
+UPDATE users SET first_name=…, last_name=…, updated_at=now() WHERE email=…
 
--- Only if analysis_id in state is a valid UUID and row is still anonymous:
+-- Claim (user has no prior analysis):
 UPDATE analyses
   SET user_id = users.id, updated_at = now()
 WHERE id = {analysisId} AND user_id IS NULL
+
+UPDATE users SET has_filled = true WHERE id = users.id
+
+-- Double-submit (user already has a claimed analysis):
+DELETE FROM analyses WHERE id = {analysisId} AND user_id IS NULL
 ```
 
-**Cookie:**
+**Cookie set on callback:**
 ```
-Set-Cookie: dentnav_user_id={user.id}; HttpOnly; SameSite=Lax; Max-Age=2592000
+Set-Cookie: dentnav_user_id={signed_jwt}; HttpOnly; SameSite=Lax; Max-Age=2592000
 (SameSite=None; Secure in production)
 ```
 
@@ -354,71 +406,74 @@ Clicks "Get Access"
 
 Frontend:
   GET /api/v1/analysis/access-status        ← confirms signedIn + latestAnalysisId
-  POST /api/v1/payments/create-checkout-session
+  POST /api/v1/payments/create-order
     Cookie: dentnav_user_id={id}
-    Body: { product_type: "analysis_access", analysis_id: "…" }
+    Body: { service_slug: "analysis_access", analysis_id: "…" }
 
 FastAPI:
   1. Reads cookie → 401 if missing
   2. Looks up analysis → 404 if not found
   3. Verifies analysis.user_id == cookie user_id → 403 if not owned
   4. Checks uq_payments_analysis_succeeded index → 409 if already paid
-  5. POST https://api.stripe.com/v1/checkout/sessions
-  ← { id: "cs_…", url: "https://checkout.stripe.com/…" }
+  5. SELECT amount, currency FROM services WHERE slug='analysis_access'
+  6. INSERT payments (user_id, service_id, reference_id=analysisId, status='pending',
+                      amount, currency)
+  7. POST https://api.razorpay.com/v1/orders
+     { amount, currency, receipt: paymentId, close_by: now()+15min }
+  8. UPDATE payments SET razorpay_order_id='order_ABC'
 
-DB write:
-  INSERT payments (
-    user_id="U1", product_type="analysis_access",
-    reference_id=analysisId, stripe_checkout_session_id="cs_…",
-    status="pending"
-  )
-
-← { checkout_url }
-  Browser redirects to Stripe hosted checkout
-  User pays
-  Stripe redirects to STRIPE_SUCCESS_URL
+← { order_id, amount, currency, key: RAZORPAY_KEY_ID }
+  Frontend opens Razorpay JS popup
+  User pays → Razorpay returns { razorpay_payment_id, razorpay_order_id, razorpay_signature }
 ```
 
-**Stripe webhook `checkout.session.completed`:**
+**Verification (primary confirmation path):**
 ```
-POST /api/v1/payments/webhook
-  Stripe-Signature: verified against STRIPE_WEBHOOK_SECRET
-  Idempotency: skip if stripe_event_id already stored
+POST /api/v1/payments/verify
+  Body: { payment_id: "pay_XYZ", order_id: "order_ABC", signature: "sig_…" }
+
+FastAPI:
+  generated = HMAC_SHA256(RAZORPAY_KEY_SECRET, "order_ABC|pay_XYZ")
+  if generated != signature → 400
 
 DB writes:
   UPDATE payments
-    SET status="succeeded", stripe_payment_intent_id="pi_…", stripe_event_id="evt_…"
-  WHERE stripe_checkout_session_id="cs_…"
+    SET status='succeeded', razorpay_payment_id='pay_XYZ', razorpay_signature='sig_…'
+  WHERE razorpay_order_id='order_ABC'
 
   UPDATE analyses SET paid=true WHERE id=payments.reference_id
 ```
 
 ---
 
-### 5.6 Payment — consultation purchase
+### 5.6 Payment — consultation booking
+
+> Full flow with slot locking, Redis soft-lock, failure cases, and Calendly
+> event creation is documented in `docs/payment-integration.md`.
 
 ```
-POST /api/v1/payments/create-checkout-session
-  Body: { product_type: "consultation_visa" }
+User selects service → calendar shows available slots (Calendly proxy)
+User selects slot   → Redis soft-lock broadcast via WebSocket to all clients
 
-FastAPI:
-  Resolves duration_minutes (introductory→45, all others→60)
+User clicks "Pay Now":
+  POST /api/v1/payments/create-order
+    Body: { booking_id: "B1" }
+  FastAPI:
+    INSERT bookings (user_id, service_id, status='pending_payment',
+                     slot_time, slot_expires_at=now()+15min)
+    INSERT payments (user_id, service_id, reference_id=B1, status='pending',
+                     amount, currency)
+    POST Razorpay /v1/orders with close_by=slot_expires_at
 
-DB writes:
-  INSERT bookings (user_id, consultation_type="visa", duration_minutes=60,
-                   status="pending_payment")
-  INSERT payments (user_id, product_type="consultation_visa",
-                   reference_id=bookings.id, status="pending")
-
-Stripe webhook checkout.session.completed:
-  UPDATE payments SET status="succeeded", …
-  UPDATE bookings SET status="confirmed", payment_id=payments.id
-
-Calendar slot booked (Cal.com / Calendly):
-  UPDATE bookings SET scheduled_at=…, cal_event_id=…
+Razorpay popup → user pays → frontend sends signature to backend
+  POST /api/v1/payments/verify
+    HMAC check + slot expiry check
+    UPDATE payments SET status='succeeded', razorpay_payment_id='pay_XYZ'
+    UPDATE bookings SET status='confirmed', payment_id=P1
+    POST Calendly API → UPDATE bookings SET calendly_event_id, scheduled_at
 
 Session completed:
-  UPDATE bookings SET status="completed"
+  UPDATE bookings SET status='completed'
 ```
 
 ---
@@ -428,18 +483,18 @@ Session completed:
 | User action | Table | Operation | Key columns set |
 |---|---|---|---|
 | Submit questionnaire | `analyses` | INSERT | `user_id= cookie user or NULL`, `paid=false`, `answers`, `payload` |
-| Sign in — first time | `users` | INSERT | `email`, `token` |
-| Sign in — return visit | `users` | UPDATE | `token`, `updated_at` |
+| Sign in — first time | `users` | INSERT | `email`, `first_name`, `last_name`, `has_filled=false` |
+| Sign in — return visit | `users` | UPDATE | `first_name`, `last_name`, `updated_at` |
 | OAuth callback with `analysis_id` | `analyses` | UPDATE | `user_id = users.id` |
 | Check access status | `analyses` | READ; **or** Case E `DELETE` + READ when a stale unclaimed id is passed | — |
-| Create checkout (analysis) | `payments` | INSERT | `status='pending'` |
-| Create checkout (consultation) | `bookings` | INSERT | `status='pending_payment'` |
-| Create checkout (consultation) | `payments` | INSERT | `status='pending'`, `reference_id=bookings.id` |
-| Stripe webhook — analysis | `payments` | UPDATE | `status='succeeded'`, `stripe_payment_intent_id`, `stripe_event_id` |
-| Stripe webhook — analysis | `analyses` | UPDATE | `paid=true` |
-| Stripe webhook — consultation | `payments` | UPDATE | `status='succeeded'`, `stripe_payment_intent_id`, `stripe_event_id` |
-| Stripe webhook — consultation | `bookings` | UPDATE | `status='confirmed'`, `payment_id` |
-| Calendar slot booked | `bookings` | UPDATE | `scheduled_at`, `cal_event_id` |
+| Create order (analysis) | `payments` | INSERT + UPDATE | `status='pending'`, `razorpay_order_id` |
+| Click Pay Now (consultation) | `bookings` | INSERT | `status='pending_payment'`, `slot_time`, `slot_expires_at` |
+| Click Pay Now (consultation) | `payments` | INSERT + UPDATE | `status='pending'`, `razorpay_order_id` |
+| POST /payments/verify — analysis | `payments` | UPDATE | `status='succeeded'`, `razorpay_payment_id`, `razorpay_signature` |
+| POST /payments/verify — analysis | `analyses` | UPDATE | `paid=true` |
+| POST /payments/verify — consultation | `payments` | UPDATE | `status='succeeded'`, `razorpay_payment_id`, `razorpay_signature` |
+| POST /payments/verify — consultation | `bookings` | UPDATE | `status='confirmed'`, `payment_id` |
+| Calendly event created | `bookings` | UPDATE | `scheduled_at`, `calendly_event_id`, `calendly_invitee_url` |
 | Session completed | `bookings` | UPDATE | `status='completed'` |
 | Read full analysis | — | READ | — |
 | Sign out | — | — | cookie deleted |
@@ -571,8 +626,16 @@ The toast and discard happen **only** in this path (not on generic loads).
 
 | Method | Path | Cookie required | DB write |
 |---|---|---|---|
-| POST | `/api/v1/payments/create-checkout-session` | Yes | INSERT payments (+ bookings for consultations) |
-| POST | `/api/v1/payments/webhook` | Stripe-Signature | UPDATE payments + analyses or bookings |
+| GET | `/api/v1/services` | No | — |
+| GET | `/api/v1/bookings/available-slots` | Yes | — (Calendly proxy) |
+| POST | `/api/v1/bookings/reserve` | Yes | INSERT bookings (`status='pending_payment'`) |
+| POST | `/api/v1/bookings/{id}/expire` | Yes | UPDATE bookings + payments |
+| POST | `/api/v1/payments/create-order` | Yes | INSERT payments · UPDATE payments (`razorpay_order_id`) |
+| POST | `/api/v1/payments/verify` | Yes | UPDATE payments + bookings; INSERT Calendly event |
+| POST | `/api/v1/payments/fail` | Yes | UPDATE payments + bookings |
+| POST | `/api/v1/payments/webhook/razorpay` | Razorpay-Signature | UPDATE payments + bookings (idempotent backup) |
+
+> Full flow and failure cases documented in `docs/payment-integration.md`.
 
 ---
 
@@ -692,16 +755,18 @@ BACKEND_CORS_ORIGINS=http://localhost:3000
 FRONTEND_BASE_URL=http://localhost:3000
 NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 
-# Stripe (payment integration — not yet wired)
-STRIPE_SECRET_KEY=sk_test_…
-STRIPE_WEBHOOK_SECRET=whsec_…
-STRIPE_PRICE_ANALYSIS_ACCESS=price_…
-STRIPE_PRICE_CONSULTATION_INTRODUCTORY=price_…
-STRIPE_PRICE_CONSULTATION_VISA=price_…
-STRIPE_PRICE_CONSULTATION_INTERVIEW=price_…
-STRIPE_PRICE_CONSULTATION_CV_SOP=price_…
-STRIPE_PRICE_CONSULTATION_CAAPID=price_…
-STRIPE_PRICE_CONSULTATION_LICENSE=price_…
-STRIPE_SUCCESS_URL=http://localhost:3000/payment/success?session_id={CHECKOUT_SESSION_ID}
-STRIPE_CANCEL_URL=http://localhost:3000/landing/packages
+# Razorpay (payment integration — pending)
+RAZORPAY_KEY_ID=rzp_live_…
+RAZORPAY_KEY_SECRET=…
+RAZORPAY_WEBHOOK_SECRET=…
+
+# Calendly (consultation booking — pending)
+CALENDLY_API_TOKEN=…
+CALENDLY_WEBHOOK_SECRET=…
+
+# Frontend (public — safe to expose)
+NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_live_…
+
+# Prices, durations, and Calendly event type UUIDs are stored in the
+# `services` DB table (seeded in migration 0004) — not in env vars.
 ```
