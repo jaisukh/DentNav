@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     aws_region: str = "us-east-1"
     aws_s3_bucket: str = ""
     aws_s3_questionnaire_key: str = ""
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
 
     questionnaire_local_path: Path = REPO_ROOT / "data" / "questionnaire.v1.json"
 

@@ -152,7 +152,7 @@ async def google_callback(
     response.set_cookie(
         key="dentnav_user_id",
         value=create_session_token(user_id),
-        max_age=60 * 60 * 24 * 30,
+        max_age=60 * 60 * 48,
         httponly=True,
         samesite=samesite,
         secure=secure,

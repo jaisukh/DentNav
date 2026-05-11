@@ -42,7 +42,7 @@ export default function LandingPage() {
         open={reclaimedToast}
         onDismiss={dismissReclaimed}
         title="You're viewing your previous response"
-        body="We kept the analysis already on your account and dropped the new submission. Only one questionnaire is stored per user."
+        body="We have an analysis already on your account, Only one questionnaire is allowed per user."
         tone="sky"
       />
 

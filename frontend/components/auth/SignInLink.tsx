@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
-import { AlreadySignedInModal } from "@/components/ui/AlreadySignedInModal";
+import { useRouter } from "next/navigation";
+import { type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { useAuthStatus } from "@/lib/auth-status-context";
 
 type LinkProps = ComponentPropsWithoutRef<typeof Link>;
@@ -14,12 +14,9 @@ type SignInLinkProps = Omit<LinkProps, "href"> & {
 };
 
 /**
- * Drop-in replacement for the static `<Link href="/auth/login">…</Link>`.
- *
- * - When the user is already signed in, intercepts the click and shows a
- *   centered "You're already signed in" modal instead of navigating.
- * - During the in-flight session check, falls back to the normal href so the
- *   button never feels frozen if the API is slow.
+ * Drop-in replacement for `<Link href="/auth/login">`.
+ * When the user is already signed in, sends them directly to /landing
+ * instead of navigating to the login page.
  */
 export function SignInLink({
   href = "/auth/login",
@@ -28,23 +25,20 @@ export function SignInLink({
   ...rest
 }: SignInLinkProps) {
   const auth = useAuthStatus();
-  const [open, setOpen] = useState(false);
+  const router = useRouter();
 
   function handleClick(event: React.MouseEvent<HTMLAnchorElement>) {
     onClick?.(event);
     if (event.defaultPrevented) return;
     if (auth.ready && auth.signedIn) {
       event.preventDefault();
-      setOpen(true);
+      router.push("/landing");
     }
   }
 
   return (
-    <>
-      <Link href={href} onClick={handleClick} {...rest}>
-        {children}
-      </Link>
-      <AlreadySignedInModal open={open} onClose={() => setOpen(false)} />
-    </>
+    <Link href={href} onClick={handleClick} {...rest}>
+      {children}
+    </Link>
   );
 }

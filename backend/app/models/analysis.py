@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,20 +24,15 @@ class Analysis(Base):
 
     user_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("users.user_id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
 
-    paid: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    country: Mapped[str] = mapped_column(String(120), default="", nullable=False)
-    degree: Mapped[str] = mapped_column(String(120), default="", nullable=False)
-    years_of_exp: Mapped[str] = mapped_column(String(120), default="", nullable=False)
     performance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     answers: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
-    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    llm_result: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -35,9 +35,15 @@ function isAnswerComplete(
   return false;
 }
 
-export function QuestionnaireView() {
+type QuestionnaireViewProps = {
+  /** When true: no NavBar/footer, progress bar sticks below the landing header,
+   *  and submission redirects to /landing/analysis. */
+  insideLanding?: boolean;
+};
+
+export function QuestionnaireView({ insideLanding = false }: QuestionnaireViewProps) {
   const router = useRouter();
-  const { refresh: refreshAuth } = useAuthStatus();
+  const { refresh: refreshAuth, signedIn, hasAnsweredQuestionnaire } = useAuthStatus();
   const [doc, setDoc] = useState<QuestionnaireDocument | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
@@ -108,6 +114,17 @@ export function QuestionnaireView() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formComplete || submitting) return;
+
+    // Signed-in user who already has an analysis: skip the LLM call entirely,
+    // redirect to server-side fetch, and surface the "previous analysis" toast.
+    if (signedIn && hasAnsweredQuestionnaire) {
+      const dest = insideLanding
+        ? `/landing/analysis?source=server&reclaimed_existing=1`
+        : `/analysis?source=server&reclaimed_existing=1`;
+      router.push(dest);
+      return;
+    }
+
     setSubmitError(null);
     setSubmitting(true);
     const handoffId = crypto.randomUUID();
@@ -119,13 +136,12 @@ export function QuestionnaireView() {
         /* quota — SESSION_KEY in storeAnalysisResult may still succeed */
       }
       storeAnalysisResult(payload);
-      // If the submitter was already signed in, the backend just flipped
-      // users.has_filled and claimed the analysis row to them. Refresh the
-      // shared auth status so subsequent navigations (navbar Sign In /
-      // Get Started buttons, /landing/packages CTA) see the new state
-      // instead of the cached `hasAnsweredQuestionnaire: false`.
+      // Refresh auth so the landing page switches from QuestionnairePrompt → PaymentPrompt
       void refreshAuth();
-      router.push(`/analysis?h=${encodeURIComponent(handoffId)}`);
+      const dest = insideLanding
+        ? `/landing/analysis?h=${encodeURIComponent(handoffId)}`
+        : `/analysis?h=${encodeURIComponent(handoffId)}`;
+      router.push(dest);
     } catch (err) {
       setSubmitting(false);
       const message =
@@ -135,7 +151,9 @@ export function QuestionnaireView() {
   };
 
   if (loadError) {
-    return (
+    return insideLanding ? (
+      <div className="py-12 text-center font-display text-slate-600">{loadError}</div>
+    ) : (
       <div className="relative isolate flex min-h-dvh w-full flex-col items-center justify-center bg-slate-50 font-display text-slate-600">
         {loadError}
       </div>
@@ -143,30 +161,41 @@ export function QuestionnaireView() {
   }
 
   if (!doc) {
-    return (
+    return insideLanding ? (
+      <div className="py-12 text-center font-display text-slate-500">Loading questionnaire…</div>
+    ) : (
       <div className="relative isolate flex min-h-dvh w-full flex-col items-center justify-center bg-slate-50 font-display text-slate-500">
         Loading questionnaire…
       </div>
     );
   }
 
-  return (
-    <div className="relative isolate flex min-h-dvh w-full flex-col bg-[radial-gradient(129.64%_129.64%_at_-4116.67%_-4116.67%,rgba(125,211,252,0.15)_1.61%,rgba(125,211,252,0)_1.61%)] pb-px font-display text-dent-ink">
-      <NavBar />
-      <div
-        className="sticky top-[68px] z-40 w-full border-b border-[#E2E8F0] bg-white/90 backdrop-blur-sm"
-        role="presentation"
-        aria-hidden
-      >
-        <div className="h-1 w-full bg-slate-100">
-          <div
-            className="h-full bg-sky-500 transition-[width] duration-200 ease-out"
-            style={{ width: `${progressPct}%` }}
-          />
-        </div>
+  const progressBar = (
+    <div
+      className={`${insideLanding ? "sticky top-14" : "sticky top-[68px]"} z-40 w-full border-b border-[#E2E8F0] bg-white/90 backdrop-blur-sm`}
+      role="presentation"
+      aria-hidden
+    >
+      <div className="h-1 w-full bg-slate-100">
+        <div
+          className="h-full bg-sky-500 transition-[width] duration-200 ease-out"
+          style={{ width: `${progressPct}%` }}
+        />
       </div>
+    </div>
+  );
 
-      <main className="z-0 flex w-full flex-1 flex-col items-center self-stretch bg-slate-50 px-5 pb-12 pt-10 sm:pt-14">
+  const formBody = (
+    <>
+      {progressBar}
+
+      <main
+        className={
+          insideLanding
+            ? "z-0 flex w-full flex-col items-center px-0 pb-6 pt-6"
+            : "z-0 flex w-full flex-1 flex-col items-center self-stretch bg-slate-50 px-5 pb-12 pt-10 sm:pt-14"
+        }
+      >
         <form
           className="isolate flex w-full max-w-3xl flex-col items-start gap-4 rounded-3xl border border-sky-500/10 bg-white/90 p-7 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)] backdrop-blur-sm"
           onSubmit={handleSubmit}
@@ -302,7 +331,21 @@ export function QuestionnaireView() {
           </div>
         </div>
       </main>
+    </>
+  );
 
+  if (insideLanding) {
+    return (
+      <div className="w-full font-display text-dent-ink">
+        {formBody}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative isolate flex min-h-dvh w-full flex-col bg-[radial-gradient(129.64%_129.64%_at_-4116.67%_-4116.67%,rgba(125,211,252,0.15)_1.61%,rgba(125,211,252,0)_1.61%)] pb-px font-display text-dent-ink">
+      <NavBar />
+      {formBody}
       <footer className="mt-12 flex w-full flex-col border-t border-slate-100 bg-white">
         <div className="mx-auto flex w-full max-w-[1440px] flex-row items-center justify-between px-6 py-4">
           <div className="text-sm font-bold text-slate-900">DentNav</div>

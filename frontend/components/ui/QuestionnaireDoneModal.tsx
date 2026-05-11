@@ -50,7 +50,7 @@ export function QuestionnaireDoneModal({
         </p>
         <div className="mt-6 flex flex-col gap-2.5">
           <Link
-            href="/analysis?source=server"
+            href="/landing/analysis?source=server"
             onClick={onClose}
             className="inline-flex w-full items-center justify-center rounded-full bg-dent-sky px-5 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
           >

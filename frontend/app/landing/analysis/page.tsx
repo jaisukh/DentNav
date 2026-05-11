@@ -11,7 +11,7 @@ import {
 } from "@/lib/analysis-session";
 import type { AnalysisPreviewPayload } from "@/lib/analysis.types";
 
-export default function AnalysisPage() {
+export default function LandingAnalysisPage() {
   const [data, setData] = useState<AnalysisPreviewPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reclaimedToast, setReclaimedToast] = useState(false);
@@ -35,15 +35,15 @@ export default function AnalysisPage() {
             setData(payload);
             sessionStorage.removeItem(analysisHandoffStorageKey(handoffId));
             clearAnalysisResultFromSession();
-            if (window.location.pathname === "/analysis" && window.location.search.includes("h=")) {
-              window.history.replaceState(null, "", "/analysis");
+            if (window.location.search.includes("h=")) {
+              window.history.replaceState(null, "", "/landing/analysis");
             }
           });
           return () => {
             cancelled = true;
           };
         } catch {
-          /* fall through to legacy session */
+          /* fall through to session storage */
         }
       }
     }
@@ -54,8 +54,8 @@ export default function AnalysisPage() {
         if (!cancelled) {
           setData(fromQuestionnaire);
           clearAnalysisResultFromSession();
-          if (window.location.pathname === "/analysis" && window.location.search.includes("h=")) {
-            window.history.replaceState(null, "", "/analysis");
+          if (window.location.search.includes("h=")) {
+            window.history.replaceState(null, "", "/landing/analysis");
           }
         }
       });
@@ -70,19 +70,14 @@ export default function AnalysisPage() {
         .then((payload) => {
           if (!cancelled) {
             setData(payload);
-            if (
-              window.location.pathname === "/analysis" &&
-              window.location.search.length > 0
-            ) {
-              window.history.replaceState(null, "", "/analysis");
+            if (window.location.search.length > 0) {
+              window.history.replaceState(null, "", "/landing/analysis");
             }
           }
         })
         .catch(() => {
           if (!cancelled) {
-            setError(
-              "No analysis on file. Please complete the questionnaire to generate one.",
-            );
+            setError("No analysis on file. Please complete the questionnaire to generate one.");
           }
         });
       return () => {
@@ -92,9 +87,7 @@ export default function AnalysisPage() {
 
     queueMicrotask(() => {
       if (!cancelled) {
-        setError(
-          "We couldn't load your results. Please return to the questionnaire and try again.",
-        );
+        setError("We couldn't load your results. Please return to the questionnaire and try again.");
       }
     });
     return () => {
@@ -104,7 +97,7 @@ export default function AnalysisPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-white font-display text-slate-600">
+      <div className="flex min-h-[50vh] items-center justify-center font-display text-slate-600">
         {error}
       </div>
     );
@@ -112,7 +105,7 @@ export default function AnalysisPage() {
 
   if (!data) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-white font-display text-slate-500">
+      <div className="flex min-h-[50vh] items-center justify-center font-display text-slate-500">
         Loading analysis…
       </div>
     );
@@ -127,7 +120,7 @@ export default function AnalysisPage() {
         body="We're showing your previous results. Only one analysis is stored per account."
         tone="sky"
       />
-      <AnalysisView data={data} />
+      <AnalysisView data={data} insideLanding />
     </>
   );
 }

@@ -32,7 +32,14 @@ export function QuestionnaireLink({
   function handleClick(event: React.MouseEvent<HTMLAnchorElement>) {
     onClick?.(event);
     if (event.defaultPrevented) return;
-    if (auth.ready && auth.signedIn && auth.hasAnsweredQuestionnaire) {
+    // Only intercept when navigating within the landing area; on public pages
+    // (e.g. the home-page navbar "Get Started") users can submit freely.
+    if (
+      auth.ready &&
+      auth.signedIn &&
+      auth.hasAnsweredQuestionnaire &&
+      String(href).startsWith("/landing")
+    ) {
       event.preventDefault();
       setOpen(true);
     }

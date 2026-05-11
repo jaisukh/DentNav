@@ -23,17 +23,8 @@ _ANALYSIS_UUID = re.compile(
 )
 
 
-def _profile_field(payload: dict[str, Any], key: str, fallback: str = "") -> str:
-    profile = payload.get("profileSnapshot") or {}
-    if isinstance(profile, dict):
-        value = profile.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return fallback
-
-
-def _readiness_overall(payload: dict[str, Any]) -> int:
-    readiness = payload.get("readinessScore") or {}
+def _readiness_overall(llm_result: dict[str, Any]) -> int:
+    readiness = llm_result.get("readinessScore") or {}
     if isinstance(readiness, dict):
         overall = readiness.get("overall")
         if isinstance(overall, (int, float)):
@@ -45,27 +36,23 @@ async def create_analysis(
     session: AsyncSession,
     *,
     answers: dict[str, Any],
-    payload: dict[str, Any],
+    llm_result: dict[str, Any],
     user_id: str | None = None,
 ) -> Analysis:
     """Insert a new analysis row and return it."""
     analysis = Analysis(
         id=str(uuid.uuid4()),
         user_id=user_id,
-        paid=False,
-        country=_profile_field(payload, "country"),
-        degree=_profile_field(payload, "degree"),
-        years_of_exp=_profile_field(payload, "clinicalExperience"),
-        performance=_readiness_overall(payload),
+        performance=_readiness_overall(llm_result),
         answers=answers,
-        payload=payload,
+        llm_result=llm_result,
     )
     session.add(analysis)
     if user_id is not None:
-        result = await session.execute(select(User).where(User.id == user_id))
+        result = await session.execute(select(User).where(User.user_id == user_id))
         user = result.scalar_one_or_none()
         if user is not None:
-            user.has_filled = True
+            user.has_filled_questionnaire = True
     await session.commit()
     await session.refresh(analysis)
     return analysis
@@ -137,21 +124,10 @@ async def claim_analysis(
         return None
     if analysis.user_id is None:
         analysis.user_id = user_id
-        result = await session.execute(select(User).where(User.id == user_id))
+        result = await session.execute(select(User).where(User.user_id == user_id))
         user = result.scalar_one_or_none()
         if user is not None:
-            user.has_filled = True
-        await session.commit()
-        await session.refresh(analysis)
-    return analysis
-
-
-async def mark_paid(session: AsyncSession, analysis_id: str) -> Analysis | None:
-    analysis = await get_analysis(session, analysis_id)
-    if analysis is None:
-        return None
-    if not analysis.paid:
-        analysis.paid = True
+            user.has_filled_questionnaire = True
         await session.commit()
         await session.refresh(analysis)
     return analysis
@@ -160,14 +136,14 @@ async def mark_paid(session: AsyncSession, analysis_id: str) -> Analysis | None:
 def build_preview(analysis: Analysis) -> dict[str, Any]:
     """
     Return the safe-to-send preview slice. Anything not in this dict is server-
-    only until the user signs in + pays. Specifically EXCLUDES:
+    only until the user signs in. Specifically EXCLUDES:
       pathwayRecommendation, mainRisks, next90DaysPlan, next12To18Months,
       dentnavServices, applicationTimeline, mythWarnings, statePlanning,
       expertConclusion, Body, executiveSummary, sections, actionPlan.
     """
-    payload = analysis.payload if isinstance(analysis.payload, dict) else {}
-    readiness = payload.get("readinessScore") or {}
-    profile = payload.get("profileSnapshot") or {}
+    llm_result = analysis.llm_result if isinstance(analysis.llm_result, dict) else {}
+    readiness = llm_result.get("readinessScore") or {}
+    profile = llm_result.get("profileSnapshot") or {}
 
     readiness_safe: dict[str, Any] = {}
     if isinstance(readiness, dict):
@@ -182,21 +158,14 @@ def build_preview(analysis: Analysis) -> dict[str, Any]:
     profile_safe: dict[str, Any] = {}
     if isinstance(profile, dict):
         profile_safe = {
-            "country": profile.get("country", analysis.country),
-            "degree": profile.get("degree", analysis.degree),
-            "clinicalExperience": profile.get(
-                "clinicalExperience", analysis.years_of_exp
-            ),
+            "country": profile.get("country", ""),
+            "degree": profile.get("degree", ""),
+            "clinicalExperience": profile.get("clinicalExperience", ""),
         }
 
     return {
         "analysisId": analysis.id,
-        "country": analysis.country or profile_safe.get("country", ""),
-        "degree": analysis.degree or profile_safe.get("degree", ""),
-        "yearsOfExp": analysis.years_of_exp
-        or profile_safe.get("clinicalExperience", ""),
         "performance": analysis.performance,
         "readinessScore": readiness_safe,
         "profileSnapshot": profile_safe,
-        "paid": analysis.paid,
     }

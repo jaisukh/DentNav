@@ -116,13 +116,13 @@ async def upsert_google_user(
         user.last_name = info.last_name
     else:
         user = User(
-            id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
             email=info.email,
             first_name=info.first_name,
             last_name=info.last_name,
-            has_filled=False,
+            has_filled_questionnaire=False,
         )
         session.add(user)
     await session.commit()
     await session.refresh(user)
-    return user.id
+    return user.user_id

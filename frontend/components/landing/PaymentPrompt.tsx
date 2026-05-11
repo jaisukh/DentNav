@@ -10,7 +10,7 @@ export function PaymentPrompt() {
       eyebrow="Questionnaire complete"
       eyebrowClassName="text-dent-deep"
       title="Unlock your full pathway analysis"
-      description="We’ve used your responses to build a tailored roadmap: recommended exams, sequencing, and practical next steps. Choose a package to open the full analysis and keep everything in one place."
+      description="We've used your responses to build a tailored roadmap: recommended exams, sequencing, and practical next steps. Choose a package to open the full analysis and keep everything in one place."
       featuresTitle="Included with access"
       features={[
         "Personalised timeline based on your questionnaire answers",
@@ -26,20 +26,28 @@ export function PaymentPrompt() {
         </svg>
       }
     >
-      <Link
-        href="/landing/packages"
-        className="group inline-flex items-center gap-2.5 rounded-full bg-dent-ink px-8 py-3.5 text-sm font-bold text-white shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-200 hover:bg-dent-deep active:scale-[0.98]"
-      >
-        <span>View packages & pricing</span>
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
-          aria-hidden
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Link
+          href="/landing/packages"
+          className="group inline-flex items-center gap-2.5 rounded-full bg-dent-ink px-8 py-3.5 text-sm font-bold text-white shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-200 hover:bg-dent-deep active:scale-[0.98]"
         >
-          <path d="M3.33 8h9.34M8.67 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </Link>
+          <span>View packages & pricing</span>
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+            aria-hidden
+          >
+            <path d="M3.33 8h9.34M8.67 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </Link>
+        <Link
+          href="/landing/analysis?source=server"
+          className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-white px-6 py-3.5 text-sm font-semibold text-dent-ink shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-200 hover:border-dent-sky/40 hover:bg-dent-badge-bg/50 active:scale-[0.98]"
+        >
+          Preview your analysis
+        </Link>
+      </div>
     </LandingPromptCard>
   );
 }

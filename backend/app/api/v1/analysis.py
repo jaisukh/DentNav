@@ -65,7 +65,7 @@ async def post_analysis(
     analysis = await create_analysis(
         session,
         answers=dict(answers),
-        payload=full_payload,
+        llm_result=full_payload,
         user_id=user_id,
     )
     return AnalysisPreviewResponse.model_validate(build_preview(analysis))
@@ -94,9 +94,9 @@ async def get_analysis_access_status(
     # `delete_stale_unclaimed_for_double_submit` only deletes Analysis rows;
     # `user` is still valid here (commit happened on the `analyses` table).
     analysis = await get_latest_analysis_for_user(session, user_id)
-    # `user.has_filled` is authoritative; `analysis is not None` covers legacy rows
-    # if the flag ever drifted.
-    has_answered = user.has_filled or (analysis is not None)
+    # `user.has_filled_questionnaire` is authoritative; `analysis is not None` covers
+    # legacy rows if the flag ever drifted.
+    has_answered = user.has_filled_questionnaire or (analysis is not None)
     if analysis is None:
         return AnalysisAccessStatusResponse(
             signedIn=True,
@@ -108,7 +108,7 @@ async def get_analysis_access_status(
     return AnalysisAccessStatusResponse(
         signedIn=True,
         hasAnsweredQuestionnaire=has_answered,
-        hasPaid=analysis.paid,
+        hasPaid=False,
         latestAnalysisId=analysis.id,
     )
 
@@ -177,10 +177,8 @@ async def get_full_analysis(
     user_id = _current_user_id(request)
     if analysis.user_id is None or analysis.user_id != user_id:
         raise HTTPException(status_code=403, detail="Sign in to access this analysis")
-    if not analysis.paid:
-        raise HTTPException(status_code=402, detail="Payment required to unlock full roadmap")
 
-    return analysis.payload
+    return analysis.llm_result
 
 
 def _current_user_id(request: Request) -> str | None:

@@ -8,7 +8,7 @@ import jwt
 from app.config import settings
 
 _ALGORITHM = "HS256"
-_SESSION_MAX_AGE = timedelta(days=30)
+_SESSION_MAX_AGE = timedelta(hours=48)
 
 # ---------------------------------------------------------------------------
 # Session cookie

@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { AnswersPreviewModal } from "@/components/ui/AnswersPreviewModal";
 import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
 import { useAuthStatus } from "@/lib/auth-status-context";
 
@@ -31,16 +29,12 @@ const SECONDARY_BTN =
  *
  * Buttons depend on the user's account state:
  * - Anonymous / unverified  -> "Go to questionnaire"
- * - Filled, not paid        -> "Get access" + "Review your response" (modal)
- * - Filled, paid            -> "View analysis" + "Review your response" (modal)
+ * - Filled, not paid        -> "Get access" + "Preview your analysis" (link to analysis page)
+ * - Filled, paid            -> "View analysis" + "Preview your analysis" (link to analysis page)
  * - Signed in, not filled   -> "Go to questionnaire"
- *
- * "Review your response" opens a modal with the user's raw questionnaire
- * answers, blurring the rest of the page.
  */
 export function OneTimeAccessCTA() {
   const auth = useAuthStatus();
-  const [reviewOpen, setReviewOpen] = useState(false);
 
   const helperCopy = !auth.ready
     ? "Checking your access…"
@@ -58,50 +52,38 @@ export function OneTimeAccessCTA() {
         ? "Your analysis is ready"
         : "Start with the questionnaire";
 
-  const buttons = renderButtons(
-    {
-      ready: auth.ready,
-      hasAnsweredQuestionnaire: auth.hasAnsweredQuestionnaire,
-      hasPaid: auth.hasPaid,
-    },
-    () => setReviewOpen(true),
-  );
+  const buttons = renderButtons({
+    ready: auth.ready,
+    hasAnsweredQuestionnaire: auth.hasAnsweredQuestionnaire,
+    hasPaid: auth.hasPaid,
+  });
 
   return (
-    <>
-      <div className="flex flex-col items-center justify-center text-center lg:pl-12">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-[#7DD3FC] ring-1 ring-white/15">
-          <IconAnalysis />
-        </div>
-
-        <p className="mt-5 font-display text-lg font-bold text-white">
-          {headlineCopy}
-        </p>
-        <p className="mt-2 text-sm leading-relaxed text-white/60">
-          {helperCopy}
-        </p>
-
-        <div className="mt-8 flex w-full flex-col gap-3">{buttons}</div>
+    <div className="flex flex-col items-center justify-center text-center lg:pl-12">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-[#7DD3FC] ring-1 ring-white/15">
+        <IconAnalysis />
       </div>
 
-      <AnswersPreviewModal
-        open={reviewOpen}
-        onClose={() => setReviewOpen(false)}
-      />
-    </>
+      <p className="mt-5 font-display text-lg font-bold text-white">
+        {headlineCopy}
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-white/60">
+        {helperCopy}
+      </p>
+
+      <div className="mt-8 flex w-full flex-col gap-3">{buttons}</div>
+    </div>
   );
 }
 
-function renderButtons(
-  flags: { ready: boolean; hasAnsweredQuestionnaire: boolean; hasPaid: boolean },
-  openReview: () => void,
-) {
+function renderButtons(flags: {
+  ready: boolean;
+  hasAnsweredQuestionnaire: boolean;
+  hasPaid: boolean;
+}) {
   if (!flags.ready) {
-    // Render the same primary slot during the in-flight check so layout
-    // doesn't visibly jump. The button is interactive but lands on the
-    // questionnaire — a safe fallback.
     return (
-      <QuestionnaireLink className={PRIMARY_BTN}>
+      <QuestionnaireLink href="/landing/questionnaire" className={PRIMARY_BTN}>
         <span className="dentnav-cta-primary__halo" aria-hidden />
         <span className="dentnav-cta-primary__shine" aria-hidden />
         <span className="relative z-10 flex items-center gap-2.5">
@@ -114,7 +96,7 @@ function renderButtons(
 
   if (!flags.hasAnsweredQuestionnaire) {
     return (
-      <QuestionnaireLink className={PRIMARY_BTN}>
+      <QuestionnaireLink href="/landing/questionnaire" className={PRIMARY_BTN}>
         <span className="dentnav-cta-primary__halo" aria-hidden />
         <span className="dentnav-cta-primary__shine" aria-hidden />
         <span className="relative z-10 flex items-center gap-2.5">
@@ -136,9 +118,9 @@ function renderButtons(
             <Arrow className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </span>
         </Link>
-        <button type="button" onClick={openReview} className={SECONDARY_BTN}>
-          Review your response
-        </button>
+        <Link href="/landing/analysis?source=server" className={SECONDARY_BTN}>
+          Preview your analysis
+        </Link>
       </>
     );
   }
@@ -153,9 +135,9 @@ function renderButtons(
           <Arrow className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
         </span>
       </Link>
-      <button type="button" onClick={openReview} className={SECONDARY_BTN}>
-        Review your response
-      </button>
+      <Link href="/landing/analysis?source=server" className={SECONDARY_BTN}>
+        Preview your analysis
+      </Link>
     </>
   );
 }
