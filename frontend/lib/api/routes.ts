@@ -17,4 +17,21 @@ export const API_ROUTES = {
   googleLogin: `${BACKEND_BASE_URL}/api/v1/auth/google/login`,
   /** Clears backend auth cookie for this browser session. */
   googleLogout: `${BACKEND_BASE_URL}/api/v1/auth/google/logout`,
+  /** Doctors available for a given service key. */
+  serviceDoctors: (serviceKey: string) =>
+    `${BACKEND_BASE_URL}/api/v1/services/${encodeURIComponent(serviceKey)}/doctors`,
+  /** Availability slots for a doctor-service. */
+  doctorAvailability: (doctorServiceId: string) =>
+    `${BACKEND_BASE_URL}/api/v1/doctors/${encodeURIComponent(doctorServiceId)}/availability`,
+  /** Reserve a slot. */
+  reserveSlot: `${BACKEND_BASE_URL}/api/v1/bookings/reserve`,
+  /** Release a reservation. */
+  releaseSlot: `${BACKEND_BASE_URL}/api/v1/bookings/reserve/release`,
+  /** Create a Razorpay order. */
+  createOrder: `${BACKEND_BASE_URL}/api/v1/payments/create-order`,
+  /** Verify payment after Razorpay modal completes. */
+  verifyPayment: `${BACKEND_BASE_URL}/api/v1/payments/verify`,
+  /** WebSocket for real-time slot updates. */
+  slotWs: (doctorServiceId: string) =>
+    `${BACKEND_BASE_URL.replace(/^http/, "ws")}/api/v1/doctors/${encodeURIComponent(doctorServiceId)}/availability/ws`,
 } as const;

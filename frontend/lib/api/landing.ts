@@ -16,26 +16,37 @@ export type LandingAccessResult = LandingAccessStatus & {
   staleQuestionnaireRemoved: boolean;
 };
 
-export async function fetchLandingAccessStatus(): Promise<LandingAccessResult> {
+export async function fetchLandingAccessStatus(
+  timeoutMs = 8_000,
+): Promise<LandingAccessResult> {
   const url = new URL(API_ROUTES.analysisAccessStatus);
   const local = getStoredAnalysisId();
   if (local) {
     url.searchParams.set("local_analysis_id", local);
   }
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch landing status: ${res.status}`);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch landing status: ${res.status}`);
+    }
+    const body = (await res.json()) as LandingAccessStatus;
+    return {
+      ...body,
+      staleQuestionnaireRemoved:
+        res.headers.get("X-Removed-Stale-Questionnaire") === "1",
+    };
+  } finally {
+    clearTimeout(timer);
   }
-  const body = (await res.json()) as LandingAccessStatus;
-  return {
-    ...body,
-    staleQuestionnaireRemoved:
-      res.headers.get("X-Removed-Stale-Questionnaire") === "1",
-  };
 }
 
 /**

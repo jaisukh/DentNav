@@ -106,7 +106,12 @@ export function AuthStatusProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    (async () => {
+
+    async function attempt(retryDelayMs?: number): Promise<void> {
+      if (retryDelayMs) {
+        await new Promise((r) => setTimeout(r, retryDelayMs));
+      }
+      if (!active) return;
       try {
         const result = await fetchLandingAccessStatus();
         if (!active) return;
@@ -120,13 +125,17 @@ export function AuthStatusProvider({ children }: { children: ReactNode }) {
         });
       } catch {
         if (!active) return;
-        setState({
-          ...DEFAULT_AUTH,
-          loading: false,
-          ready: true,
-        });
+        if (!retryDelayMs) {
+          // First failure — retry once after 3 s (covers brief backend restarts)
+          await attempt(3_000);
+        } else {
+          // Second failure — give up and send to login
+          setState({ ...DEFAULT_AUTH, loading: false, ready: true });
+        }
       }
-    })();
+    }
+
+    attempt();
     return () => {
       active = false;
     };

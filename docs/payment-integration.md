@@ -1,690 +1,737 @@
 # DentNav — Payment Integration & Consultation Booking
 
-> **Scope:** Database schemas (existing + planned) and the end-to-end Razorpay
-> payment flow for consultation bookings. Questionnaire-access payment follows
-> a simpler variant of the same flow (no calendar step).
+> **Scope:** Complete reference for the database schema, booking flow,
+> Razorpay integration, Calendly integration, and edge-case handling.
+> Covers both the analysis-access payment (no calendar) and the
+> multi-doctor consultation booking flow (with calendar + slot locking).
 
 ---
 
-## Page 1 — Database Schemas
+## 1. Current Database Schema
 
----
-
-### 1.1 Existing Tables
-
-#### `users`
+### 1.1 `users` (live — migration 0004)
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | VARCHAR(36) PK | UUID v4 |
+| `user_id` | VARCHAR(36) PK | UUID v4 |
 | `email` | VARCHAR(320) UNIQUE NOT NULL | Google account email |
-| `first_name` | VARCHAR(120) NOT NULL | Default `''` |
-| `last_name` | VARCHAR(120) NOT NULL | Default `''` |
-| `has_filled` | BOOLEAN NOT NULL | `true` after questionnaire submitted |
-| `created_at` | TIMESTAMPTZ NOT NULL | `server_default=now()` |
-| `updated_at` | TIMESTAMPTZ NOT NULL | Auto-updated on write |
+| `first_name` | VARCHAR(120) NOT NULL | |
+| `last_name` | VARCHAR(120) NOT NULL | |
+| `has_filled_questionnaire` | BOOLEAN NOT NULL | `true` after questionnaire submitted |
+| `created_at` | TIMESTAMPTZ NOT NULL | |
+| `updated_at` | TIMESTAMPTZ NOT NULL | |
 
-#### `analyses`
+### 1.2 `analyses` (live — migration 0004)
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | VARCHAR(36) PK | UUID v4 |
-| `user_id` | VARCHAR(36) FK → users `SET NULL` | NULL until OAuth claim |
-| `paid` | BOOLEAN NOT NULL | `false` → **access gate** for full payload |
-| `country` | VARCHAR(120) NOT NULL | Extracted from LLM payload |
-| `degree` | VARCHAR(120) NOT NULL | Extracted from LLM payload |
-| `years_of_exp` | VARCHAR(120) NOT NULL | Extracted from LLM payload |
+| `user_id` | VARCHAR(36) FK → users SET NULL | NULL until OAuth claim |
 | `performance` | INTEGER NOT NULL | Readiness score 0–100 |
 | `answers` | JSONB NOT NULL | Raw questionnaire answers |
-| `payload` | JSONB NOT NULL | Full LLM response — server-only until `paid=true` |
+| `llm_result` | JSONB NOT NULL | Full LLM response — server-only until payment confirmed |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 | `updated_at` | TIMESTAMPTZ NOT NULL | |
 
 Index: `ix_analyses_user_id` on `(user_id)`
 
+> `llm_result` is only released via `GET /api/v1/analysis/{id}/full`, which
+> checks for a `succeeded` payment row before returning the payload.
+> There is no `paid` column on `analyses` — payment status lives in `payments`.
+
 ---
 
-### 1.2 New Tables (migrations 0004 + 0005 + 0006)
+## 2. Planned Tables (migrations 0005 – 0011)
 
-#### `services` — migration 0004
+### 2.1 `services` — migrations 0005, 0011
 
-Single source of truth for every purchasable product. Seeded once; updated
-in-place when prices or Calendly event types change — no code deploy needed.
+Business product catalogue. Independent of any doctor or Calendly account.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | VARCHAR(36) PK | UUID v4 |
-| `slug` | VARCHAR(100) UNIQUE NOT NULL | Machine key: `analysis_access`, `consultation_visa`, … |
-| `name` | VARCHAR(255) NOT NULL | Display name: `"Visa Consultation"` |
-| `description` | TEXT NOT NULL DEFAULT `''` | Shown on the services page |
-| `category` | VARCHAR(50) NOT NULL | `analysis` \| `consultation` |
-| `duration_minutes` | INTEGER | NULL for `analysis` category |
-| `amount` | INTEGER NOT NULL | Price in the currency's minor unit (e.g. cents for USD) — never a float |
+| `service_key` | VARCHAR(100) UNIQUE NOT NULL | Machine-readable lookup key (e.g. `visa_consultation`) |
+| `name` | VARCHAR(255) NOT NULL | Display label |
+| `description` | TEXT NOT NULL DEFAULT `''` | |
+| `duration_minutes` | INTEGER | NULL → analysis (no calendar). NOT NULL → consultation. |
+| `base_amount` | INTEGER NOT NULL | Price in minor unit (cents). 0 = TBD. |
 | `currency` | VARCHAR(10) NOT NULL DEFAULT `'usd'` | |
-| `calendly_event_type_uuid` | VARCHAR(255) | NULL for `analysis` category |
-| `is_active` | BOOLEAN NOT NULL DEFAULT `true` | Soft-disable — hides from UI without deleting |
+| `is_active` | BOOLEAN NOT NULL DEFAULT `true` | Soft-disable without breaking FK history |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 | `updated_at` | TIMESTAMPTZ NOT NULL | |
 
-**Why each column exists:**
+**Design notes:**
+- `service_key` is a stable slug used by backend logic and frontend env vars — never a URL segment.
+- Category is derived: `duration_minutes IS NULL` → analysis; `IS NOT NULL` → consultation. No separate `category` column.
+- Calendly event type is doctor-specific → lives in `doctor_services`.
 
-| Column | Why it's necessary |
-|---|---|
-| `id` | Stable FK target for `payments.service_id` and `bookings.service_id`. Using a UUID rather than `slug` means renaming a service doesn't break existing payment rows. |
-| `slug` | Machine-readable key used in code and API calls (`"consultation_visa"`). Keeps logic readable without hardcoding UUIDs everywhere. |
-| `name` | Human-readable label rendered directly in the UI (service card title, Razorpay popup description, email confirmations). Lives here so it can be edited without a code deploy. |
-| `description` | Longer copy shown on the services page beneath the title. Same reason — content editable via DB, not code. |
-| `category` | Determines the booking flow. `analysis` → no calendar, links to `analyses` table. `consultation` → calendar + slot locking + Calendly event. Backend uses this to pick the right handler at `POST /payments/create-order`. |
-| `duration_minutes` | Passed to Calendly when creating the scheduled event. NULL for `analysis` since there's no session to schedule. Stored here so changing a session length doesn't require a code change. |
-| `amount` | Current price in the currency's minor unit. Copied (snapshotted) into `payments.amount` at order creation so the payment record always reflects what the user was actually charged, even if the price changes later. |
-| `currency` | Paired with `amount`. Determines which Razorpay currency code is sent in the order payload. Defaults to `usd`. |
-| `calendly_event_type_uuid` | The UUID of the Calendly Event Type for this consultation (e.g. the "Visa Consultation - 60 min" event). Backend reads this when proxying the available-slots call and when creating the Calendly event post-payment. NULL for `analysis`. Stored here so switching Calendly event types needs only a DB update. |
-| `is_active` | Lets you disable a service (hide from UI, reject new bookings) without deleting its row — deletion would break FK references in historical `payments` and `bookings` rows. |
-| `created_at` / `updated_at` | Audit trail — useful for knowing when a price was last changed. |
+**Frontend service catalog approach:** Services are **static on the frontend** — no API call to `/services` on page load. `NEXT_PUBLIC_SERVICE_KEY_*` env vars hold the stable keys; when a user selects a service the frontend reads the env var and passes the key to the booking API. The backend resolves the UUID internally.
 
-**Seed data (migration 0004):**
+**Seed data (migration 0005 + 0011):**
 
-| `slug` | `name` | `category` | `duration_minutes` | `amount` |
-|---|---|---|---|---|
-| `analysis_access` | Analysis Access | `analysis` | NULL | TBD |
-| `consultation_introductory` | Introductory Consultation | `consultation` | 45 | TBD |
-| `consultation_visa` | Visa Consultation | `consultation` | 60 | TBD |
-| `consultation_interview` | Interview Preparation | `consultation` | 60 | TBD |
-| `consultation_cv_sop` | CV / SOP Review | `consultation` | 60 | TBD |
-| `consultation_caapid` | CAAPID Assistance | `consultation` | 60 | TBD |
-| `consultation_license` | License Guidance | `consultation` | 60 | TBD |
+| `service_key` | `name` | `duration_minutes` | Notes |
+|---|---|---|---|
+| `analysis_access` | Analysis Access | NULL | Unlocks `llm_result` for an analysis |
+| `intro_consultation` | Introductory Consultation | 45 | |
+| `visa_consultation` | Visa Consultation | 60 | |
+| `interview_preparation` | Interview Preparation | 60 | |
+| `cv_sop_review` | CV / SOP Review | 60 | |
+| `caapid_assistance` | CAAPID Assistance | 60 | |
+| `license_guidance` | License Guidance | 60 | |
 
 ---
 
-#### `payments` — migration 0005
-
-Tracks every payment attempt, one row per checkout initiated.
+### 2.2 `doctors` — migration 0006
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | VARCHAR(36) PK | UUID v4 |
-| `user_id` | VARCHAR(36) FK → users NOT NULL | User must be signed in to pay |
-| `service_id` | VARCHAR(36) FK → services NOT NULL | Which service was purchased |
-| `reference_id` | VARCHAR(36) | `analyses.id` for `analysis` · `bookings.id` for `consultation` |
-| `razorpay_order_id` | VARCHAR(255) UNIQUE NOT NULL | `order_ABC` — set at order creation |
-| `razorpay_payment_id` | VARCHAR(255) UNIQUE | `pay_XYZ` — set after frontend verification |
-| `razorpay_signature` | VARCHAR(512) | HMAC-SHA256 signature stored for audit |
-| `amount` | INTEGER NOT NULL | Snapshot of price at time of payment — never a float |
-| `currency` | VARCHAR(10) NOT NULL DEFAULT `'usd'` | Snapshot from `services.currency` |
-| `status` | VARCHAR(50) NOT NULL DEFAULT `'pending'` | `pending \| succeeded \| failed \| expired \| refunded` |
-| `metadata` | JSONB NOT NULL DEFAULT `'{}'` | Extra context (error codes, refund reason, etc.) |
+| `name` | VARCHAR(255) NOT NULL | |
+| `bio` | TEXT NOT NULL DEFAULT `''` | |
+| `photo_url` | TEXT NOT NULL DEFAULT `''` | |
+| `specializations` | TEXT[] NOT NULL DEFAULT `'{}'` | e.g. `['visa','residency']` |
+| `calendly_user_uri` | VARCHAR(512) | Fetched once via `GET /users/me` with PAT |
+| `calendly_pat` | TEXT | Personal Access Token — **encrypted at rest** |
+| `is_active` | BOOLEAN NOT NULL DEFAULT `true` | |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 | `updated_at` | TIMESTAMPTZ NOT NULL | |
 
-> `amount` and `currency` are copied from `services` at order creation time
-> so the payment record reflects what the user was actually charged, even if
-> the service price changes later.
+> `calendly_pat` is never returned by any API. Used server-side only to call
+> Calendly on behalf of that doctor. Must be AES-256 encrypted at rest.
 
+---
+
+### 2.3 `doctor_services` — migration 0007
+
+Junction table: which doctor offers which service, and via which Calendly event type.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | VARCHAR(36) PK | UUID v4 |
+| `doctor_id` | VARCHAR(36) FK → doctors CASCADE | |
+| `service_id` | VARCHAR(36) FK → services RESTRICT | |
+| `calendly_event_type_uuid` | VARCHAR(255) NOT NULL | UUID portion of the event type URI |
+| `calendly_event_type_uri` | TEXT NOT NULL | Full URI — used directly in API calls |
+| `price_override` | INTEGER | NULL → use `services.base_amount` |
+| `is_active` | BOOLEAN NOT NULL DEFAULT `true` | |
+| `created_at` | TIMESTAMPTZ NOT NULL | |
+| `updated_at` | TIMESTAMPTZ NOT NULL | |
+
+Constraints:
 ```sql
--- Prevents a second successful charge for the same analysis at the DB level
-CREATE UNIQUE INDEX uq_payments_analysis_succeeded
-  ON payments (reference_id)
-  WHERE service_id = (SELECT id FROM services WHERE slug = 'analysis_access')
-    AND status = 'succeeded';
+UNIQUE (doctor_id, service_id)
+INDEX ix_doctor_services_service_id ON (service_id)
+INDEX ix_doctor_services_doctor_id  ON (doctor_id)
 ```
 
-#### `bookings` — migration 0006 (consultation services only)
+**Effective price:** `COALESCE(doctor_services.price_override, services.base_amount)`
 
-One row per consultation booking, created before payment is taken.
+**Why this table exists:** Two doctors offering the same service (e.g. "Visa Consultation")
+have completely separate Calendly accounts and event types. `doctor_services` is the bridge
+that maps a business concept (the service) to a provider-specific Calendly concept (the event
+type). Availability is fetched per event type — there is no global doctor availability endpoint
+in Calendly.
+
+---
+
+### 2.4 `slot_reservations` — migration 0008 (replaces Redis)
+
+Soft lock on a slot for the 5 minutes between slot selection and payment initiation.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | VARCHAR(36) PK DEFAULT `gen_random_uuid()` | |
+| `doctor_service_id` | VARCHAR(36) FK → doctor_services CASCADE | |
+| `slot_time` | TIMESTAMPTZ NOT NULL | |
+| `user_id` | VARCHAR(36) FK → users CASCADE | |
+| `expires_at` | TIMESTAMPTZ NOT NULL | `now() + 5 minutes` |
+| `created_at` | TIMESTAMPTZ NOT NULL DEFAULT `now()` | |
+
+```sql
+UNIQUE (doctor_service_id, slot_time)
+INDEX ix_slot_reservations_user_id    ON (user_id)
+INDEX ix_slot_reservations_expires_at ON (expires_at)
+```
+
+**How the lock works — atomic conditional upsert:**
+
+```sql
+INSERT INTO slot_reservations (doctor_service_id, slot_time, user_id, expires_at)
+VALUES ($ds_id, $slot_time, $user_id, now() + interval '5 minutes')
+ON CONFLICT (doctor_service_id, slot_time) DO UPDATE
+  SET user_id    = EXCLUDED.user_id,
+      expires_at = EXCLUDED.expires_at
+  WHERE slot_reservations.expires_at <= now()  -- only overwrite if expired
+RETURNING id;
+```
+
+- RETURNING has a row → reservation created (or taken over from an expired one). ✓
+- RETURNING empty → slot is currently held by another user → 409.
+- Two concurrent requests race on the UNIQUE constraint. PostgreSQL serialises them:
+  one wins, one gets nothing. No advisory locks, no daemon, no Redis.
+
+Expired rows are invisible (queries filter `expires_at > now()`). No cleanup daemon
+needed on the critical path. A periodic `DELETE WHERE expires_at <= now()` handles housekeeping.
+
+---
+
+### 2.5 `bookings` — migration 0009
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | VARCHAR(36) PK | UUID v4 |
+| `user_id` | VARCHAR(36) FK → users RESTRICT | |
+| `doctor_service_id` | VARCHAR(36) FK → doctor_services RESTRICT | Captures doctor + service in one FK |
+| `payment_id` | VARCHAR(36) FK → payments | NULL until payment succeeds |
+| `status` | VARCHAR(50) NOT NULL DEFAULT `'pending_payment'` | See transitions below |
+| `slot_time` | TIMESTAMPTZ | Chosen slot (UTC) |
+| `slot_expires_at` | TIMESTAMPTZ | 15-minute payment hold TTL |
+| `scheduled_at` | TIMESTAMPTZ | Set by Calendly after event confirmed |
+| `calendly_event_uri` | TEXT | Full event URI — used for cancellations |
+| `calendly_invitee_uri` | TEXT | Invitee URI — user's reschedule/cancel link |
+| `notes` | TEXT | |
+| `created_at` | TIMESTAMPTZ NOT NULL | |
+| `updated_at` | TIMESTAMPTZ NOT NULL | |
+
+```sql
+INDEX ix_bookings_user_id           ON (user_id)
+INDEX ix_bookings_doctor_service_id ON (doctor_service_id)
+INDEX ix_bookings_status            ON (status)
+```
+
+**Status transitions:**
+```
+pending_payment ──► confirmed   payment succeeded + Calendly event created
+                ──► cancelled   payment failed | slot expired | user cancelled
+confirmed       ──► completed   session done (admin marks)
+confirmed       ──► cancelled   user or admin cancels
+confirmed       ──► no_show     user missed session
+```
+
+---
+
+### 2.6 `payments` — migration 0010
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | VARCHAR(36) PK | UUID v4 |
 | `user_id` | VARCHAR(36) FK → users NOT NULL | |
-| `service_id` | VARCHAR(36) FK → services NOT NULL | Determines duration + Calendly event type |
-| `payment_id` | VARCHAR(36) FK → payments | NULL until payment succeeds |
-| `status` | VARCHAR(50) NOT NULL DEFAULT `'pending_payment'` | `pending_payment \| confirmed \| completed \| cancelled \| no_show` |
-| `slot_time` | TIMESTAMPTZ | Calendar slot chosen by user — set before payment |
-| `slot_expires_at` | TIMESTAMPTZ | `slot_time + 15 min` — slot hold TTL |
-| `scheduled_at` | TIMESTAMPTZ | Set by Calendly after event confirmed |
-| `calendly_event_id` | VARCHAR(255) | Calendly event UUID |
-| `calendly_invitee_url` | TEXT | Calendly invitee link for cancellations |
-| `notes` | TEXT | Internal prep notes |
+| `doctor_service_id` | VARCHAR(36) FK → doctor_services | NULL for analysis access |
+| `reference_id` | VARCHAR(36) | `analyses.id` (analysis) or `bookings.id` (consultation) |
+| `razorpay_order_id` | VARCHAR(255) UNIQUE NOT NULL | Set at order creation |
+| `razorpay_payment_id` | VARCHAR(255) UNIQUE | Set after verification |
+| `razorpay_signature` | VARCHAR(512) | HMAC-SHA256 — stored for audit |
+| `amount` | INTEGER NOT NULL | Snapshot at order creation — never a float |
+| `currency` | VARCHAR(10) NOT NULL DEFAULT `'usd'` | Snapshot from service |
+| `status` | VARCHAR(50) NOT NULL DEFAULT `'pending'` | See transitions below |
+| `metadata` | JSONB NOT NULL DEFAULT `'{}'` | Error codes, refund reason, etc. |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 | `updated_at` | TIMESTAMPTZ NOT NULL | |
 
-> `duration_minutes` and `calendly_event_type_uuid` are read from `services`
-> at booking time — not stored on `bookings` directly.
+```sql
+-- Prevents double-charging for the same analysis
+CREATE UNIQUE INDEX uq_payments_analysis_succeeded
+  ON payments (reference_id)
+  WHERE doctor_service_id IS NULL AND status = 'succeeded';
+```
+
+**Status transitions:**
+```
+pending ──► succeeded   HMAC verified + slot confirmed
+        ──► failed      Razorpay payment.failed callback
+        ──► expired     slot lock TTL elapsed before payment
+        ──► refunded    late payment (Case D) or manual refund
+```
 
 ---
 
-### 1.3 ID Relationship Map
+### 2.7 `calendly_webhook_events` — migration 0011 (optional)
+
+Idempotent audit log of raw Calendly webhook payloads.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | VARCHAR(36) PK DEFAULT `gen_random_uuid()` | |
+| `event_type` | VARCHAR(100) NOT NULL | `invitee.created` · `invitee.canceled` |
+| `calendly_uuid` | VARCHAR(255) UNIQUE NOT NULL | Idempotency key |
+| `booking_id` | VARCHAR(36) FK → bookings | |
+| `payload` | JSONB NOT NULL | |
+| `processed_at` | TIMESTAMPTZ | NULL = not yet processed |
+| `created_at` | TIMESTAMPTZ NOT NULL DEFAULT `now()` | |
+
+---
+
+### 2.8 ID Relationship Map
 
 ```
-services (S1: slug='consultation_visa')
-  └── bookings (B1)          ← service_id = S1
-        └── payments (P1)    ← service_id = S1, reference_id = B1
-              └── razorpay_order_id = order_ABC
-                    └── razorpay_payment_id = pay_XYZ
-                          └── razorpay_signature (verification proof)
+services (S1: "Visa Consultation", 60 min)
+doctors  (D1: Dr. Priya)
+  └── doctor_services (DS1: D1 + S1, event_type_uri=..., price_override=NULL)
+        └── slot_reservations (SR1: DS1, slot=10:00, user=U1, expires=+5min)
+        └── bookings (B1: DS1, user=U1, status=pending_payment, slot_expires_at=+15min)
+              └── payments (P1: user=U1, ds=DS1, ref=B1, status=pending)
+                    └── razorpay_order_id = order_ABC
+                          └── razorpay_payment_id = pay_XYZ
 
 users (U1)
-  └── analyses (A1)          ← user_id = U1
-  └── bookings (B1)          ← user_id = U1
-  └── payments (P1)          ← user_id = U1
+  └── analyses (A1) ← user_id = U1
+  └── bookings (B1) ← user_id = U1
+  └── payments (P1) ← user_id = U1
+
+-- analysis access payment (no doctor_services)
+payments (P2: user=U1, doctor_service_id=NULL, reference_id=A1.id, status=succeeded)
 ```
 
 ---
 
-### 1.5 Status Transitions
-
-**`payments.status`**
-```
-pending → succeeded   (signature verified on backend)
-        → failed      (Razorpay failure callback → POST /payments/fail)
-        → expired     (slot lock expired before payment completed)
-        → refunded    (manual/webhook refund)
-```
-
-**`bookings.status`**
-```
-pending_payment → confirmed   (payment succeeded + Calendly event created)
-               → cancelled    (payment failed / slot expired)
-confirmed      → completed    (session done)
-confirmed      → cancelled    (user/admin cancels)
-confirmed      → no_show      (user missed session)
-```
-
----
----
-
-## Page 2 — Razorpay Payment Flow (Consultation Booking)
-
-> This flow covers all services **except** the questionnaire analysis unlock.
-> The analysis-access flow is identical except it skips the calendar step
-> (steps 1–3) and links `reference_id` to `analyses.id` instead of
-> `bookings.id`.
-
----
+## 3. Consultation Booking Flow
 
 ### Actors
 
-| Actor | Description |
+| Actor | Role |
 |---|---|
-| **Frontend** | Next.js App Router (user's browser) |
-| **Backend** | FastAPI service |
-| **Razorpay** | Payment gateway (order creation, checkout SDK, webhooks) |
-| **Database** | PostgreSQL — `users`, `services`, `bookings`, `payments` |
-| **Calendly** | Calendar scheduling (slot availability + event creation) |
+| Frontend | Next.js — renders calendar UI, opens Razorpay SDK |
+| Backend | FastAPI — all business logic, DB writes, Calendly proxy |
+| PostgreSQL | Source of truth for locks and state |
+| Razorpay | Payment gateway (order creation, checkout, webhooks) |
+| Calendly | Source of truth for slot availability + event creation |
 
 ---
 
-### 2.1 User Lands on Services Page
+### 3.1 Service & Doctor Selection
 
 ```
-User navigates to /landing/services
-  (protected: middleware.ts + AuthGuard must pass)
+Frontend renders a static services list from NEXT_PUBLIC_SERVICE_KEY_* env vars.
+No API call needed for the catalog — service names, durations, and prices are hardcoded.
 
-Services displayed (non-questionnaire):
-  • Introductory Consultation (45 min)
-  • Visa Consultation (60 min)
-  • Interview Preparation (60 min)
-  • CV / SOP Review (60 min)
-  • CAAPID Assistance (60 min)
-  • License Guidance (60 min)
+User clicks "Visa Consultation"
+  → frontend reads process.env.NEXT_PUBLIC_SERVICE_KEY_VISA_CONSULTATION
+    = "visa_consultation"
 
-User clicks a service card → e.g. "Book Visa Consultation"
-  Frontend captures: { service_id: "S1" }   ← loaded from GET /api/v1/services
-```
+GET /api/v1/services/{service_key}/doctors
+← [{ doctor_id, name, bio, photo_url, specializations, effective_amount, currency }, ...]
+  -- effective_amount = COALESCE(ds.price_override, s.base_amount)
 
----
-
-### 2.2 Calendar UI — Slot Selection
-
-```
-Frontend renders calendar UI
-  GET /api/v1/bookings/available-slots?service_id=S1
-    Backend: SELECT calendly_event_type_uuid FROM services WHERE id='S1'
-    Proxies → Calendly API for open slots on that event type
-  ← [ { slot_time: "2026-05-10T10:00:00Z" }, … ]
-
-User picks a slot → e.g. 10:00 AM on May 10
-  Frontend holds selection in local state (not yet persisted)
-  User clicks "Proceed to Payment"
+User selects Dr. Priya → frontend holds { doctor_service_id: "DS1" } in state
 ```
 
 ---
 
-### 2.3 Slot Lock — Reserve Booking Row
+### 3.2 Availability Fetch
 
 ```
-POST /api/v1/bookings/reserve
-  Cookie: dentnav_user_id={id}
-  Body: {
-    service_id: "S1",
-    slot_time:  "2026-05-10T10:00:00Z"
-  }
+GET /api/v1/doctors/{doctor_id}/availability?service_id={id}&date_from=...&date_to=...
 
 Backend:
-  1. Verify session cookie → 401 if missing
-  2. SELECT * FROM services WHERE id='S1' AND is_active=true AND category='consultation'
-     → 404 if not found or inactive
-  3. Check slot is still available (race guard — SELECT FOR UPDATE) → 409 if taken
-  4. INSERT bookings (
-       id              = B1 (new UUID),
-       user_id         = U1,
-       service_id      = S1,
-       status          = 'pending_payment',
-       slot_time       = '2026-05-10T10:00:00',
-       slot_expires_at = now() + 15 min       ← slot hold TTL
-     )
+  1. SELECT calendly_event_type_uri, doctor.calendly_pat
+     FROM doctor_services JOIN doctors WHERE ds.id = DS1
+  2. GET calendly.com/event_type_available_times
+       ?event_type={calendly_event_type_uri}&start_time={}&end_time={}
+     Authorization: Bearer {doctor.calendly_pat}
+  3. SELECT slot_time FROM bookings
+       WHERE doctor_service_id = DS1
+         AND status NOT IN ('cancelled')
+         AND slot_time BETWEEN $start AND $end
+     UNION
+     SELECT slot_time FROM slot_reservations
+       WHERE doctor_service_id = DS1
+         AND expires_at > now()
+         AND slot_time BETWEEN $start AND $end
+         AND user_id != $current_user
+  4. Annotate each Calendly slot: available | reserved | booked
 
-← { booking_id: "B1", slot_time: "…", expires_at: "…" }
+← [{ slot_time, status: "available" | "reserved" | "booked" }, ...]
+```
+
+---
+
+### 3.3 Slot Reservation (5-minute soft lock)
+
+```
+User picks 10:00 AM → frontend greys slot out immediately (optimistic)
+
+POST /api/v1/bookings/reserve
+  Body: { doctor_service_id: "DS1", slot_time: "2026-06-01T10:00:00Z" }
+
+Backend:
+  1. Auth check → 401
+  2. Confirm doctor_services row is_active → 404
+  3. Confirm no confirmed booking exists for this slot → 409
+  4. Conditional upsert into slot_reservations (atomic):
+       INSERT ... ON CONFLICT DO UPDATE WHERE expires_at <= now()
+     → RETURNING empty: slot taken by active reservation → 409
+     → RETURNING row: reservation created ✓
+  5. DELETE any prior slot_reservation by this user on DS1
+     (user switching slots before paying)
+
+← { reservation_id: "SR1", slot_time: "...", expires_at: "+5min" }
+
+Frontend: starts 5-minute countdown
+  If countdown hits 0 → POST /bookings/reserve/release → slot released
+```
+
+---
+
+### 3.4 Order Creation (promote to 15-minute hard lock)
+
+```
+User clicks "Proceed to Payment"
+
+POST /api/v1/payments/create-order
+  Body: { doctor_service_id: "DS1", slot_time: "2026-06-01T10:00:00Z" }
+
+Backend:
+  1. Auth check → 401
+  2. Verify slot_reservation exists for this user + DS1 + slot_time, expires_at > now() → 409
+  3. Effective price: COALESCE(ds.price_override, s.base_amount)
+  4. INSERT bookings (
+       status         = 'pending_payment',
+       slot_time      = '2026-06-01T10:00:00Z',
+       slot_expires_at = now() + 15 min
+     )
+  5. INSERT payments (status='pending', amount, currency snapshot)
+  6. POST razorpay.com/v1/orders {
+       amount, currency, receipt=P1.id,
+       close_by = unix(slot_expires_at),  ← Razorpay rejects payment after this
+       notes: { payment_id, booking_id, user_id }
+     }
+  7. UPDATE payments SET razorpay_order_id = 'order_ABC'
+  8. DELETE slot_reservations WHERE id = SR1   ← hand off; booking is now the lock
+
+← { order_id: "order_ABC", amount, currency, booking_id: "B1",
+    expires_at: "...", razorpay_key: "rzp_live_..." }
 
 Frontend:
-  Starts 15-minute countdown timer
-  If timer reaches 0 before payment → POST /bookings/{B1}/expire
-  → UPDATE bookings SET status='cancelled' WHERE id='B1'
-  → redirect user back to calendar to pick again
+  Replaces 5-min timer with 15-min timer
+  Opens Razorpay checkout modal
 ```
 
 ---
 
-### 2.4 Create Payment Row + Razorpay Order
-
-```
-POST /api/v1/payments/create-order
-  Cookie: dentnav_user_id={id}
-  Body: { booking_id: "B1" }
-
-Backend:
-  1. Verify session cookie → 401
-  2. Load booking B1, confirm owner = U1, status = 'pending_payment' → 403/404
-  3. Confirm slot not yet expired (slot_expires_at > now()) → 410 if expired
-  4. SELECT amount, currency FROM services WHERE id = B1.service_id
-
-  5. INSERT payments (
-       id           = P1 (new UUID),
-       user_id      = U1,
-       service_id   = S1,
-       reference_id = B1,
-       status       = 'pending',
-       amount = services.amount,   ← snapshot at time of purchase
-       currency     = services.currency
-     )
-
-  5. POST https://api.razorpay.com/v1/orders
-       Authorization: Basic (RAZORPAY_KEY_ID:RAZORPAY_KEY_SECRET)
-       Body: {
-         amount:   5000,
-         currency: "usd",
-         receipt:  "P1",
-         close_by: 1746866400,   ← Unix timestamp of slot_expires_at
-                                    Razorpay rejects payment after this point
-                                    at the gateway level — nothing to refund
-         notes: {
-           payment_id:  "P1",
-           booking_id:  "B1",
-           user_id:     "U1"
-         }
-       }
-
-  Razorpay responds:
-  {
-    id:       "order_ABC",
-    amount:   5000,
-    currency: "usd",
-    status:   "created",
-    receipt:  "P1"
-  }
-
-  6. UPDATE payments SET razorpay_order_id = 'order_ABC' WHERE id = 'P1'
-
-← {
-    order_id:   "order_ABC",
-    amount:     5000,
-    currency:   "usd",
-    key:        "rzp_live_…",
-    booking_id: "B1",
-    user_name:  "Harsha Arra",
-    user_email: "user@example.com"
-  }
-```
-
----
-
-### 2.5 Frontend — Razorpay Checkout SDK
+### 3.5 Razorpay Checkout (frontend)
 
 ```javascript
-// Frontend opens the Razorpay payment modal
 const rzp = new Razorpay({
-  key:        "rzp_live_…",
-  order_id:   "order_ABC",
-  amount:     5000,
-  currency:   "usd",
-  name:       "DentNav",
-  description: "Visa Consultation — 60 min",
-  prefill: {
-    name:  "Harsha Arra",
-    email: "user@example.com"
-  },
-  handler: function (response) {
-    // SUCCESS — send all three IDs to backend for verification
+  key:         "rzp_live_...",
+  order_id:    "order_ABC",
+  amount:      5000,
+  currency:    "inr",
+  name:        "DentNav",
+  description: "Visa Consultation — 60 min with Dr. Priya",
+  prefill:     { name: "...", email: "..." },
+  handler: function(response) {
+    // Payment captured — send to backend for verification
     verifyPayment(response)
   },
   modal: {
-    ondismiss: function () {
-      // User closed the modal without paying — no action needed
-      // Slot hold timer is still running
+    ondismiss: function() {
+      // User closed modal — 15-min timer still running, slot still held
     }
   }
 })
 rzp.open()
 ```
 
-> Razorpay shows an embedded popup — no page redirect. The user enters
-> card / UPI / net banking details inside the modal.
-> Razorpay internally creates `pay_XYZ` and returns it in the `handler` callback.
-
 ---
 
-### 2.6 SUCCESS PATH — Backend Signature Verification
+### 3.6 Payment Verification (success path)
 
 ```
-Frontend receives from Razorpay handler:
-{
-  razorpay_payment_id: "pay_XYZ",
-  razorpay_order_id:   "order_ABC",
-  razorpay_signature:  "sig_abc123…"
-}
+Razorpay handler fires: { razorpay_payment_id, razorpay_order_id, razorpay_signature }
 
 POST /api/v1/payments/verify
-  Cookie: dentnav_user_id={id}
-  Body: {
-    payment_id: "pay_XYZ",
-    order_id:   "order_ABC",
-    signature:  "sig_abc123…"
-  }
+  Body: { payment_id: "pay_XYZ", order_id: "order_ABC", signature: "sig_..." }
 
-Backend verification (CRITICAL — never trust frontend alone):
+Backend:
   Step 1 — HMAC signature check
-    generated = HMAC_SHA256(
-      key     = RAZORPAY_KEY_SECRET,
-      message = "order_ABC|pay_XYZ"
-    )
-    if generated != signature → 400 "Signature mismatch"
+    generated = HMAC_SHA256(RAZORPAY_KEY_SECRET, "order_ABC|pay_XYZ")
+    generated != signature → 400
 
-  Step 2 — Atomic slot check + confirm (eliminates TOCTOU race)
-    A separate SELECT + UPDATE would leave a window where the slot expires
-    between the check and the write. Instead, the check and the flip are
-    a single statement:
-
+  Step 2 — Atomic slot confirm (eliminates TOCTOU race)
     UPDATE bookings
       SET status     = 'confirmed',
           payment_id = 'P1',
           updated_at = now()
-      WHERE id = 'B1'
-        AND status = 'pending_payment'
-        AND slot_expires_at > now()
+    WHERE id = 'B1'
+      AND status = 'pending_payment'
+      AND slot_expires_at > now()
     RETURNING id
 
-    → RETURNING is empty: slot expired (or already confirmed by another request)
-      → treat as Case D: issue refund + return 409
+    → RETURNING empty: slot expired or already confirmed
+      → refund immediately via Razorpay API → 409
 
-DB write on success (RETURNING returned a row):
-  UPDATE payments
-    SET status               = 'succeeded',
-        razorpay_payment_id  = 'pay_XYZ',
-        razorpay_signature   = 'sig_abc123…',
-        updated_at           = now()
-  WHERE razorpay_order_id = 'order_ABC'
+  Step 3 — Record payment
+    UPDATE payments
+      SET status              = 'succeeded',
+          razorpay_payment_id = 'pay_XYZ',
+          razorpay_signature  = 'sig_...',
+          updated_at          = now()
+    WHERE razorpay_order_id = 'order_ABC'
 
-← { ok: true, booking_id: "B1" }
+  Step 4 — Trigger Calendly event creation (background task)
+
+← { ok: true, booking_id: "B1", slot_time: "...", doctor_name: "..." }
 ```
 
 ---
 
-### 2.7 Calendly Event Creation
+### 3.7 Calendly Event Creation (background, after 3.6)
 
 ```
-Triggered immediately after bookings.status = 'confirmed'
+Backend:
+  1. SELECT calendly_event_type_uri, doctor.calendly_pat
+     FROM doctor_services JOIN doctors WHERE ds.id = DS1
 
-Backend → Calendly API
-  SELECT calendly_event_type_uuid FROM services WHERE id = B1.service_id
-  POST https://api.calendly.com/scheduled_events
-    Authorization: Bearer CALENDLY_API_TOKEN
-    Body: {
-      event_type_uuid: services.calendly_event_type_uuid,
-      start_time:      "2026-05-10T10:00:00Z",
-      invitee: {
-        name:  "Harsha Arra",
-        email: "user@example.com"
-      }
-    }
+  2. Re-verify slot still available in Calendly (external booking guard):
+     GET calendly.com/event_type_available_times?...
+     If slot gone → cancel booking → refund → notify user
 
-Calendly responds:
-  {
-    resource: {
-      uri:         "https://api.calendly.com/scheduled_events/EVT_123",
-      start_time:  "2026-05-10T10:00:00Z"
-    }
-  }
+  3. POST calendly.com/scheduled_events {
+       event_type_uri, start_time,
+       invitee: { name, email }
+     }
+     Authorization: Bearer {doctor.calendly_pat}
 
-DB write:
-  UPDATE bookings
-    SET scheduled_at          = '2026-05-10T10:00:00Z',
-        calendly_event_id     = 'EVT_123',
-        calendly_invitee_url  = 'https://calendly.com/cancellations/…',
-        updated_at            = now()
-  WHERE id = 'B1'
+  4. UPDATE bookings
+       SET scheduled_at        = '2026-06-01T10:00:00Z',
+           calendly_event_uri  = 'https://api.calendly.com/scheduled_events/EVT123',
+           calendly_invitee_uri = 'https://calendly.com/cancellations/...',
+           updated_at          = now()
+     WHERE id = 'B1'
 
 Calendly sends confirmation email to user automatically.
 ```
 
 ---
 
-### 2.8 FAILURE PATH
+### 3.8 Failure Cases
 
-**Case A — Payment failed inside Razorpay modal**
-
-```javascript
-// Razorpay fires this on card decline, timeout, etc.
-rzp.on('payment.failed', function (response) {
-  notifyBackend(response.error)
-})
+**Case A — Card declined / Razorpay failure**
 ```
+Razorpay payment.failed callback fires in frontend
 
-```
 POST /api/v1/payments/fail
-  Body: { order_id: "order_ABC", error_code: "BAD_REQUEST_ERROR", ... }
+  Body: { order_id: "order_ABC", error: { ... } }
 
 Backend:
-  UPDATE payments
-    SET status     = 'failed',
-        metadata   = { error: response.error },
-        updated_at = now()
-  WHERE razorpay_order_id = 'order_ABC'
+  UPDATE payments SET status='failed', metadata={ error } WHERE razorpay_order_id='order_ABC'
+  UPDATE bookings  SET status='cancelled'                  WHERE id='B1'
 
-  UPDATE bookings
-    SET status     = 'cancelled',
-        updated_at = now()
-  WHERE id = 'B1'
-
-← { ok: true }
-Frontend → redirect user back to /landing/services with error toast
+Frontend → redirect to services with error toast
 ```
 
-**Case B — Slot expired before payment (frontend-driven)**
-
+**Case B — Slot expired (frontend countdown)**
 ```
-Frontend countdown timer hits 0:
-  POST /api/v1/bookings/{B1}/expire
+15-min countdown hits 0
+
+POST /api/v1/bookings/reserve/release  (or /bookings/{id}/expire)
 
 Backend:
-  UPDATE bookings SET status='cancelled' WHERE id='B1' AND status='pending_payment'
-  UPDATE payments SET status='expired'  WHERE reference_id='B1' AND status='pending'
+  UPDATE bookings  SET status='cancelled' WHERE id='B1' AND status='pending_payment'
+  UPDATE payments  SET status='expired'   WHERE reference_id='B1' AND status='pending'
 
-Frontend → redirect to calendar with "Slot expired — please pick another time"
+Frontend → redirect to calendar: "Slot expired — please pick a new time"
 ```
 
-> The Razorpay order (`order_ABC`) is still alive — Razorpay orders have
-> **no automatic expiry**. If the user somehow completes payment after this
-> point, Case D handles it.
-
-**Case C — Signature mismatch**
-
+**Case C — HMAC signature mismatch**
 ```
-Backend returns 400.
-Frontend shows generic error.
-Booking remains 'pending_payment', payment remains 'pending'.
-A background job (or next POST /expire call) cleans up stale rows.
+POST /payments/verify → 400 "signature_mismatch"
+
+Booking and payment remain in pending state.
+No money moves (Razorpay captured nothing; signature check is before any DB write).
+Cleanup job or next expiry call marks them expired.
 ```
 
-**Case D — User pays after slot has already expired (late payment)**
-
-> With `close_by` set on the Razorpay order, Razorpay blocks the payment at
-> the gateway level the moment `close_by` passes — no money moves, nothing to
-> refund. This eliminates the dangerous window entirely.
->
-> The backend slot check in `POST /verify` is kept as a secondary defence for
-> any edge case where `close_by` enforcement is delayed on Razorpay's side.
-
+**Case D — Payment arrives after slot expired (late payment)**
 ```
-Timeline:
-  T+0:00  User reserves slot B1 → slot_expires_at = T+0:15
-  T+0:14  User opens Razorpay modal
-            order_ABC has close_by = T+0:15
-  T+0:15  Frontend timer fires → POST /bookings/{B1}/expire
-            bookings.status → 'cancelled'
-            payments.status → 'expired'
-          Razorpay order also closes (close_by passed)
-  T+0:17  User tries to complete payment inside the modal
-            Razorpay rejects at gateway — "order closed"
-            payment.failed callback fires with error code ORDER_CLOSED
+Primary defence: Razorpay order has close_by = unix(slot_expires_at)
+  → Razorpay rejects at gateway: no money moves, nothing to refund.
 
-  No money moves. No refund needed.
-```
-
-**Secondary defence — backend slot check (belt-and-suspenders):**
-
-```
-If Razorpay somehow processes a payment past close_by (rare, treat as a bug):
-
-POST /api/v1/payments/verify
-  Step 1 — Signature check → valid
-  Step 2 — Slot check:
-    SELECT status, slot_expires_at FROM bookings WHERE id='B1'
-    status = 'cancelled'  OR  slot_expires_at < now()
-    → LATE PAYMENT DETECTED
+Secondary defence (belt-and-suspenders): if Razorpay somehow processes past close_by:
+  POST /payments/verify Step 2:
+    bookings.status = 'cancelled' OR slot_expires_at < now()
+    → RETURNING empty → LATE PAYMENT DETECTED
 
   Immediate refund:
-    POST https://api.razorpay.com/v1/payments/pay_XYZ/refund
-      Body: { amount: 5000 }
+    POST razorpay.com/payments/pay_XYZ/refund { amount }
 
   UPDATE payments SET status='refunded', metadata={ refund_reason:'slot_expired' }
 
-← 409 { error: "slot_expired", message: "Your slot expired. A full refund has been initiated." }
+← 409 { error: "slot_expired", message: "Slot expired. Full refund initiated." }
+```
+
+**Case E — External Calendly booking takes the slot**
+```
+Detected during Calendly event creation (Step 3.7 re-verification):
+  Slot no longer in available_times response
+
+Backend:
+  UPDATE bookings SET status='cancelled'
+  POST razorpay.com/payments/pay_XYZ/refund
+  UPDATE payments SET status='refunded', metadata={ refund_reason:'slot_taken_externally' }
+  Notify user via email/webhook
+
+Also detected proactively via Calendly invitee.created webhook:
+  Cross-check against any pending_payment bookings for same slot
+  If match → cancel + refund before user pays
 ```
 
 ---
 
-### 2.9 Razorpay Webhook (Backup Confirmation)
-
-Razorpay also sends server-to-server webhooks. These act as a safety net if
-the frontend tab was closed after payment but before `POST /payments/verify`.
+### 3.9 Razorpay Webhook (backup confirmation)
 
 ```
 POST /api/v1/payments/webhook/razorpay
-  X-Razorpay-Signature: verified against RAZORPAY_WEBHOOK_SECRET
+  Verify: X-Razorpay-Signature against RAZORPAY_WEBHOOK_SECRET
 
-Event: payment.captured
-Payload:
-{
-  event: "payment.captured",
-  payload: {
-    payment: {
-      entity: {
-        id:       "pay_XYZ",
-        order_id: "order_ABC",
-        status:   "captured"
-      }
-    }
-  }
-}
+Events:
+  payment.captured:
+    1. Look up payment by razorpay_order_id
+    2. Skip if status already 'succeeded' or 'refunded' (idempotent)
+    3. Run Step 2 slot check (Case D)
+    4. Run same DB writes as §3.6
+    5. Create Calendly event if calendly_event_uri IS NULL
 
-Backend:
-  1. Verify X-Razorpay-Signature → reject if invalid
-  2. Look up payment by razorpay_order_id = 'order_ABC'
-  3. Idempotency: skip if payment.status already 'succeeded' or 'refunded'
-  4. Slot expiry check (same as §2.6 Step 2) → refund immediately if expired (Case D)
-  5. Run same DB writes as §2.6 (verify path)
-  6. Run Calendly event creation if not already done (calendly_event_id IS NULL)
+  payment.failed:
+    UPDATE payments SET status='failed'
+    UPDATE bookings  SET status='cancelled' if still pending_payment
+
+  refund.processed:
+    UPDATE payments SET status='refunded'
 ```
 
-> **Primary truth:** Signature verification (§2.6) is the primary confirmation
-> path. The webhook is a backup for dropped frontend connections.
-> Unlike Stripe (where the webhook IS the primary), Razorpay makes the
-> frontend callback the happy path — but you must verify the signature
-> on the backend before trusting it.
+> **Primary path:** frontend `handler` → `POST /verify`.
+> **Backup path:** Razorpay webhook → fires if the tab was closed after payment
+> but before verify completed.
 
 ---
 
-### 2.10 Complete State Transition Table
+## 4. Analysis Access Payment Flow
 
-| User action | Table | Operation | Key columns set |
-|---|---|---|---|
-| Click "Book" → pick slot | — | — | (frontend only) |
-| POST /bookings/reserve | `bookings` | INSERT | `status='pending_payment'`, `slot_time`, `slot_expires_at` |
-| POST /payments/create-order | `payments` | INSERT | `status='pending'`, `reference_id=B1` |
-| POST /payments/create-order | `payments` | UPDATE | `razorpay_order_id='order_ABC'` |
-| Razorpay checkout success | — | — | Frontend receives `pay_XYZ`, `signature` |
-| POST /payments/verify | `payments` | UPDATE | `status='succeeded'`, `razorpay_payment_id`, `razorpay_signature` |
-| POST /payments/verify | `bookings` | UPDATE | `status='confirmed'`, `payment_id=P1` |
-| Calendly event created | `bookings` | UPDATE | `scheduled_at`, `calendly_event_id`, `calendly_invitee_url` |
-| Session completed | `bookings` | UPDATE | `status='completed'` |
-| Payment failed | `payments` | UPDATE | `status='failed'`, `metadata.error` |
-| Payment failed | `bookings` | UPDATE | `status='cancelled'` |
-| Slot expired (frontend timer) | `bookings` | UPDATE | `status='cancelled'` |
-| Slot expired (frontend timer) | `payments` | UPDATE | `status='expired'` |
-| Late payment detected (Case D) | `payments` | UPDATE | `status='refunded'`, `metadata.refund_reason='slot_expired'` |
-| Webhook backup | `payments` | UPDATE | same as verify (idempotent + slot check) |
-| Manual refund | `payments` | UPDATE | `status='refunded'` |
-| Manual refund | `bookings` | UPDATE | `status='cancelled'` |
+Simpler variant — no calendar, no slot locking.
+
+```
+1. User on /landing/analysis (has completed questionnaire, not yet unlocked)
+   GET /api/v1/analysis/access-status → { hasAnsweredQuestionnaire: true, hasPaid: false }
+
+2. User clicks "Unlock Full Analysis"
+   POST /api/v1/payments/create-order
+     Body: { reference_id: "A1" }   -- analyses.id
+
+   Backend:
+     SELECT id FROM services WHERE service_key = 'analysis_access'
+       -- the "Analysis Access" service row
+     INSERT payments (
+       user_id          = U1,
+       doctor_service_id = NULL,
+       reference_id     = 'A1',
+       amount           = services.base_amount,
+       currency         = services.currency,
+       status           = 'pending'
+     )
+     POST razorpay.com/v1/orders { amount, currency, receipt=P1.id }
+     UPDATE payments SET razorpay_order_id = 'order_ABC'
+   ← { order_id, amount, currency, key }
+
+3. Frontend opens Razorpay modal. User pays.
+
+4. POST /api/v1/payments/verify { payment_id, order_id, signature }
+   Backend:
+     HMAC check → 400 if mismatch
+     UPDATE payments
+       SET status='succeeded', razorpay_payment_id, razorpay_signature
+     WHERE razorpay_order_id='order_ABC'
+       AND status='pending'
+     RETURNING id
+
+   -- No booking/slot logic. No Calendly.
+
+   ← { ok: true, analysis_id: "A1" }
+
+5. GET /api/v1/analysis/{A1}/full
+   Backend:
+     SELECT EXISTS(
+       SELECT 1 FROM payments
+       WHERE reference_id = 'A1'
+         AND status = 'succeeded'
+         AND doctor_service_id IS NULL
+     ) → 402 if false
+     Return analysis.llm_result
+```
 
 ---
 
-### 2.11 API Endpoints (Consultation Payment)
+## 5. Concurrency & Idempotency
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/api/v1/services` | No | List all `is_active=true` services |
-| GET | `/api/v1/bookings/available-slots` | Cookie | Proxy to Calendly — `?service_id=` |
-| POST | `/api/v1/bookings/reserve` | Cookie | Lock slot → INSERT bookings row |
-| POST | `/api/v1/bookings/{id}/expire` | Cookie | Release expired slot |
-| POST | `/api/v1/payments/create-order` | Cookie | INSERT payment + create Razorpay order |
-| POST | `/api/v1/payments/verify` | Cookie | HMAC verify → confirm booking |
-| POST | `/api/v1/payments/fail` | Cookie | Record failure → cancel booking |
-| POST | `/api/v1/payments/webhook/razorpay` | Razorpay-Sig | Backup server-to-server confirmation |
+| Endpoint | Strategy |
+|---|---|
+| `POST /bookings/reserve` | Conditional upsert on UNIQUE(doctor_service_id, slot_time) |
+| `POST /payments/create-order` | Check existing pending payment for same user+DS+slot first |
+| `POST /payments/verify` | `WHERE status='pending_payment' AND slot_expires_at > now()` — second call is no-op |
+| `POST /payments/webhook/razorpay` | `WHERE status != 'succeeded'` guard before any write |
+| Calendly webhook | `INSERT ... ON CONFLICT (calendly_uuid) DO NOTHING` |
 
 ---
 
-### 2.12 Environment Variables
+## 6. Calendly Integration Notes
 
-Prices, durations, and Calendly event type UUIDs live in the `services` table
-(seeded in migration 0004) — not in env vars. Only secrets and gateway
-credentials belong here.
+- Calendly availability is always fetched **per event type**, never per doctor globally.
+- `doctor_services.calendly_event_type_uri` is the bridge from business concept to Calendly concept.
+- Each doctor authenticates via their own PAT (`doctors.calendly_pat`) — no shared token.
+- `calendly_user_uri` is fetched once at doctor onboarding via `GET /users/me` and cached.
+- Calendly remains the **source of truth** for availability — we never mirror it.
+- External bookings made directly in Calendly are detected via the `invitee.created` webhook and via re-verification before event creation.
+
+---
+
+## 7. Calendly Sync Strategy
+
+| Trigger | When | Action |
+|---|---|---|
+| Doctor onboarding | Admin adds doctor | `GET /event_types?user={uri}` → seed `doctor_services` rows |
+| Admin on-demand | "Sync" button | Same — idempotent upsert |
+| Periodic | Weekly background job | Detect deleted/changed event types → soft-disable stale rows |
+| Calendly webhook | `event_type.*` events | Update or soft-delete affected `doctor_services` rows |
+
+---
+
+## 8. Migration Plan
+
+| Migration | Contents |
+|---|---|
+| 0005 | Create `services`, seed rows |
+| 0006 | Create `doctors` |
+| 0007 | Create `doctor_services` |
+| 0008 | Create `slot_reservations` |
+| 0009 | Create `bookings` |
+| 0010 | Create `payments` + deferred `bookings.payment_id` FK |
+| 0011 | Add `service_key` to `services`, seed values |
+| 0012 | Create `calendly_webhook_events` (optional) |
+
+---
+
+## 9. Environment Variables
 
 ```bash
 # Razorpay
-RAZORPAY_KEY_ID=rzp_live_…
-RAZORPAY_KEY_SECRET=…
-RAZORPAY_WEBHOOK_SECRET=…
+RAZORPAY_KEY_ID=rzp_live_...
+RAZORPAY_KEY_SECRET=...
+RAZORPAY_WEBHOOK_SECRET=...
 
 # Calendly
-CALENDLY_API_TOKEN=…
-CALENDLY_WEBHOOK_SECRET=…   # For verifying Calendly webhooks
+CALENDLY_WEBHOOK_SIGNING_KEY=...   # verifying Calendly webhook payloads
+# No global CALENDLY_API_TOKEN — each doctor's PAT lives in doctors.calendly_pat
 
-# Frontend (public — safe to expose)
-NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_live_…
+# Frontend (public)
+NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_live_...
+
+# Service keys — must match service_key values in the services table
+# Frontend uses these to pass a stable key to the booking API without hardcoding UUIDs
+NEXT_PUBLIC_SERVICE_KEY_ANALYSIS_ACCESS=analysis_access
+NEXT_PUBLIC_SERVICE_KEY_INTRO_CONSULTATION=intro_consultation
+NEXT_PUBLIC_SERVICE_KEY_VISA_CONSULTATION=visa_consultation
+NEXT_PUBLIC_SERVICE_KEY_INTERVIEW_PREPARATION=interview_preparation
+NEXT_PUBLIC_SERVICE_KEY_CV_SOP_REVIEW=cv_sop_review
+NEXT_PUBLIC_SERVICE_KEY_CAAPID_ASSISTANCE=caapid_assistance
+NEXT_PUBLIC_SERVICE_KEY_LICENSE_GUIDANCE=license_guidance
 ```
-
-> To change a price or add a service, run an UPDATE / INSERT on the `services`
-> table directly — no code change or redeploy required.
-
----
-

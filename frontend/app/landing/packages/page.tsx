@@ -132,6 +132,7 @@ function IconMap() {
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 type ConsultPackage = {
+  serviceKey: string;
   category: string;
   title: string;
   duration: string;
@@ -150,6 +151,7 @@ type ConsultPackage = {
 
 const consultPackages: ConsultPackage[] = [
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_INTRO_CONSULTATION ?? "intro_consultation",
     category: "Foundation",
     title: "Introductory Consultation",
     duration: "45 min",
@@ -173,6 +175,7 @@ const consultPackages: ConsultPackage[] = [
     outcomeGrad: "bg-amber-50/60 ring-1 ring-amber-100",
   },
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_VISA_CONSULTATION ?? "visa_consultation",
     category: "Immigration",
     title: "Visa Guidance",
     duration: "60 min",
@@ -197,6 +200,7 @@ const consultPackages: ConsultPackage[] = [
     outcomeGrad: "bg-sky-50/60 ring-1 ring-sky-100",
   },
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_INTERVIEW_PREPARATION ?? "interview_preparation",
     category: "Career",
     title: "Interview Preparation",
     duration: "60 min",
@@ -221,6 +225,7 @@ const consultPackages: ConsultPackage[] = [
     outcomeGrad: "bg-violet-50/60 ring-1 ring-violet-100",
   },
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_CV_SOP_REVIEW ?? "cv_sop_review",
     category: "Application",
     title: "CV & SoP Preparation",
     duration: "60 min",
@@ -245,6 +250,7 @@ const consultPackages: ConsultPackage[] = [
     outcomeGrad: "bg-emerald-50/60 ring-1 ring-emerald-100",
   },
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_CAAPID_ASSISTANCE ?? "caapid_assistance",
     category: "Applications",
     title: "ADEA CAAPID & PASS Guidance",
     duration: "60 min",
@@ -269,6 +275,7 @@ const consultPackages: ConsultPackage[] = [
     outcomeGrad: "bg-rose-50/60 ring-1 ring-rose-100",
   },
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_LICENSE_GUIDANCE ?? "license_guidance",
     category: "Licensing",
     title: "State License Guidance",
     duration: "60 min",
@@ -297,6 +304,7 @@ const consultPackages: ConsultPackage[] = [
 // ─── Consult card ─────────────────────────────────────────────────────────────
 
 function ConsultCard({
+  serviceKey,
   category,
   title,
   duration,
@@ -381,7 +389,7 @@ function ConsultCard({
           {/* CTA */}
           <div className="mt-4 space-y-2 border-t border-[#F8FAFC] pt-4">
             <Link
-              href="#"
+              href={`/landing/booking/${serviceKey}`}
               className="group/btn flex w-full items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white py-2.5 text-[13px] font-semibold text-dent-ink transition-all hover:border-dent-sky/35 hover:bg-dent-badge-bg/50"
             >
               Book a session

@@ -46,6 +46,16 @@ class Settings(BaseSettings):
 
     braintrust_api_key: str = ""
 
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
+
+    admin_api_key: str = ""
+
+    @property
+    def has_razorpay_config(self) -> bool:
+        return bool(self.razorpay_key_id and self.razorpay_key_secret)
+
     @field_validator("cors_origin_regex", mode="before")
     @classmethod
     def _cors_regex_empty_means_default(cls, v: Any) -> Any:
