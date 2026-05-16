@@ -104,6 +104,15 @@ export async function createOrder(
   return res.json() as Promise<CreateOrderResponse>;
 }
 
+export async function cancelOrder(bookingId: string): Promise<void> {
+  await fetch(API_ROUTES.cancelOrder, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ booking_id: bookingId }),
+  });
+}
+
 export async function verifyPayment(
   razorpayOrderId: string,
   razorpayPaymentId: string,

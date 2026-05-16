@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS='--max-old-space-size=8192' npx next dev",
+    "dev": "NODE_OPTIONS='--max-old-space-size=8192' npx next dev --webpack",
     "build": "npx next build",
     "start": "npx next start",
     "lint": "npx eslint .",
@@ -11,8 +11,11 @@
     "docker:down": "docker compose down"
   },
   "dependencies": {
+    "@next/swc-darwin-arm64": "^16.2.6",
     "@react-oauth/google": "^0.13.5",
     "gsap": "^3.14.2",
+    "lightningcss": "^1.32.0",
+    "lightningcss-darwin-arm64": "^1.32.0",
     "next": "16.2.1",
     "ogl": "^1.0.11",
     "react": "19.2.4",

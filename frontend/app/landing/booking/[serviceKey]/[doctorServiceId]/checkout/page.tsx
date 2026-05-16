@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { createOrder, releaseSlot, verifyPayment } from "@/lib/api/booking";
+import { cancelOrder, createOrder, releaseSlot, verifyPayment } from "@/lib/api/booking";
 
 // ─── Razorpay types ───────────────────────────────────────────────────────────
 
@@ -101,7 +101,7 @@ export default function CheckoutPage() {
   const { serviceKey, doctorServiceId } = params;
 
   const [phase, setPhase] = useState<Phase>("ready");
-  const [order, setOrder] = useState<{ orderId: string; amount: number; currency: string } | null>(null);
+  const [order, setOrder] = useState<{ orderId: string; amount: number; currency: string; bookingId: string } | null>(null);
   const [confirmation, setConfirmation] = useState<{ bookingId: string; slotTime: string; doctorName: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -130,7 +130,7 @@ export default function CheckoutPage() {
       setPhase("creating");
       try {
         const res = await createOrder(doctorServiceId, slotIso);
-        activeOrder = { orderId: res.order_id, amount: res.amount, currency: res.currency };
+        activeOrder = { orderId: res.order_id, amount: res.amount, currency: res.currency, bookingId: res.booking_id };
         setOrder(activeOrder);
       } catch (err: unknown) {
         paying.current = false;
@@ -143,6 +143,8 @@ export default function CheckoutPage() {
         return;
       }
     }
+
+    if (!activeOrder) return;
 
     // Step 2 — load Razorpay script
     try {
@@ -167,7 +169,7 @@ export default function CheckoutPage() {
     const rzp = new window.Razorpay({
       key,
       amount: activeOrder.amount,
-      currency: activeOrder.currency,
+      currency: activeOrder.currency.toUpperCase(),
       order_id: activeOrder.orderId,
       name: "DentNav",
       description: `Session with ${doctorName}`,
@@ -197,7 +199,12 @@ export default function CheckoutPage() {
       modal: {
         ondismiss: () => {
           paying.current = false;
-          setPhase("ready");
+          if (activeOrder?.bookingId) {
+            cancelOrder(activeOrder.bookingId).catch(() => {});
+          } else if (reservationId) {
+            releaseSlot(reservationId).catch(() => {});
+          }
+          router.push(`/landing/booking/${serviceKey}`);
         },
       },
       theme: { color: "#0C1A2E" },

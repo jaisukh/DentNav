@@ -16,6 +16,7 @@ from app.models.doctor_service import DoctorService
 from app.models.payment import Payment
 from app.models.slot_reservation import SlotReservation
 from app.schemas.payment import (
+    CancelOrderRequest,
     CreateOrderRequest,
     CreateOrderResponse,
     VerifyPaymentRequest,
@@ -27,7 +28,7 @@ from app.services.ws_manager import ws_manager
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
-_BOOKING_TTL_MINUTES = 15
+_BOOKING_TTL_MINUTES = 10
 
 
 def _require_user(request: Request) -> str:
@@ -134,6 +135,40 @@ async def create_order(
         booking_id=booking_id,
         expires_at=slot_expires_at,
     )
+
+
+@router.post("/cancel-order", status_code=200)
+async def cancel_order(
+    body: CancelOrderRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict:
+    user_id = _require_user(request)
+
+    result = await session.execute(
+        select(Booking).where(
+            Booking.id == body.booking_id,
+            Booking.user_id == user_id,
+            Booking.status == "pending_payment",
+        )
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        return {"ok": True}  # already cancelled / not found — idempotent
+
+    doctor_service_id = booking.doctor_service_id
+    slot_time_iso = booking.slot_time.isoformat()
+
+    now = datetime.now(timezone.utc)
+    await session.execute(
+        update(Booking)
+        .where(Booking.id == body.booking_id)
+        .values(status="cancelled", updated_at=now)
+    )
+    await session.commit()
+
+    await ws_manager.broadcast(doctor_service_id, slot_time_iso, "available")
+    return {"ok": True}
 
 
 @router.post("/verify", response_model=VerifyPaymentResponse)

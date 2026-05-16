@@ -31,6 +31,8 @@ export const API_ROUTES = {
   createOrder: `${BACKEND_BASE_URL}/api/v1/payments/create-order`,
   /** Verify payment after Razorpay modal completes. */
   verifyPayment: `${BACKEND_BASE_URL}/api/v1/payments/verify`,
+  /** Cancel a pending_payment booking (user dismissed Razorpay modal). */
+  cancelOrder: `${BACKEND_BASE_URL}/api/v1/payments/cancel-order`,
   /** WebSocket for real-time slot updates. */
   slotWs: (doctorServiceId: string) =>
     `${BACKEND_BASE_URL.replace(/^http/, "ws")}/api/v1/doctors/${encodeURIComponent(doctorServiceId)}/availability/ws`,

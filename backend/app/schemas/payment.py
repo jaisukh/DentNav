@@ -16,6 +16,10 @@ class CreateOrderResponse(BaseModel):
     expires_at: datetime
 
 
+class CancelOrderRequest(BaseModel):
+    booking_id: str
+
+
 class VerifyPaymentRequest(BaseModel):
     razorpay_payment_id: str
     razorpay_order_id: str
