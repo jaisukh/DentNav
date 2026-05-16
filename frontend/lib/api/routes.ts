@@ -13,6 +13,8 @@ export const API_ROUTES = {
   myAnalysisPreview: `${BACKEND_BASE_URL}/api/v1/analysis/me/preview`,
   /** Raw questionnaire answers for the signed-in user's latest analysis. */
   myAnalysisAnswers: `${BACKEND_BASE_URL}/api/v1/analysis/me/answers`,
+  /** Full LLM payload — only accessible after analysis_access payment. */
+  myAnalysisFull: `${BACKEND_BASE_URL}/api/v1/analysis/me/full`,
   /** Starts Google OAuth on the backend (GET redirects to Google). */
   googleLogin: `${BACKEND_BASE_URL}/api/v1/auth/google/login`,
   /** Clears backend auth cookie for this browser session. */
@@ -35,6 +37,13 @@ export const API_ROUTES = {
   verifyPayment: `${BACKEND_BASE_URL}/api/v1/payments/verify`,
   /** Cancel a pending_payment booking (user dismissed Razorpay modal). */
   cancelOrder: `${BACKEND_BASE_URL}/api/v1/payments/cancel-order`,
+  /** Price for any service by key — used for analysis access price display. */
+  servicePrice: (serviceKey: string) =>
+    `${BACKEND_BASE_URL}/api/v1/services/${encodeURIComponent(serviceKey)}/price`,
+  /** Create a Razorpay order for one-time analysis access purchase. */
+  accessCreateOrder: `${BACKEND_BASE_URL}/api/v1/payments/access/create-order`,
+  /** Verify payment for one-time analysis access. */
+  accessVerifyPayment: `${BACKEND_BASE_URL}/api/v1/payments/access/verify`,
   /** WebSocket for real-time slot updates. */
   slotWs: (doctorServiceId: string) =>
     `${BACKEND_BASE_URL.replace(/^http/, "ws")}/api/v1/doctors/${encodeURIComponent(doctorServiceId)}/availability/ws`,

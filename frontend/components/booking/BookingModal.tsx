@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { fetchAvailability, reserveSlot, type Slot, type SlotStatus } from "@/lib/api/booking";
 import { API_ROUTES } from "@/lib/api/routes";
 import type { DoctorForService } from "@/lib/api/booking";
@@ -71,17 +70,23 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type ReservationInfo = {
+  slot: string;
+  reservationId: string;
+  expiresAt: string;
+};
+
 type BookingModalProps = {
   doctor: DoctorForService;
   serviceKey: string;
   serviceLabel: string;
   onClose: () => void;
+  onReserved: (info: ReservationInfo) => void;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function BookingModal({ doctor, serviceKey, serviceLabel, onClose }: BookingModalProps) {
-  const router = useRouter();
+export function BookingModal({ doctor, serviceLabel, onClose, onReserved }: BookingModalProps) {
   const today = startOfToday();
   const maxDate = addDays(today, MAX_DAYS_AHEAD);
   const monthOptions = getMonthOptions();
@@ -259,16 +264,11 @@ export function BookingModal({ doctor, serviceKey, serviceLabel, onClose }: Book
     setReserveError(null);
     try {
       const reservation = await reserveSlot(doctor.doctor_service_id, selectedSlot);
-      const query = new URLSearchParams({
+      onReserved({
         slot: selectedSlot,
-        name: doctor.name,
-        expires_at: reservation.expires_at,
-        reservation_id: reservation.reservation_id,
+        reservationId: reservation.reservation_id,
+        expiresAt: reservation.expires_at,
       });
-      onClose();
-      router.push(
-        `/landing/booking/${serviceKey}/${doctor.doctor_service_id}/checkout?${query}`
-      );
     } catch (err) {
       reservingRef.current = false;
       setReserveError(

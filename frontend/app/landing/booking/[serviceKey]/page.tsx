@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { fetchDoctorsForService, type DoctorForService } from "@/lib/api/booking";
 import { BookingModal } from "@/components/booking/BookingModal";
+import { CheckoutModal } from "@/components/booking/CheckoutModal";
 
 const SERVICE_LABELS: Record<string, string> = {
   intro_consultation: "Introductory Consultation",
@@ -115,9 +116,12 @@ export default function BookingDoctorSelectPage() {
   const serviceKey = params.serviceKey;
   const serviceLabel = SERVICE_LABELS[serviceKey] ?? serviceKey.replace(/_/g, " ");
 
+  type ReservationInfo = { slot: string; reservationId: string; expiresAt: string };
+
   const [doctors, setDoctors] = useState<DoctorForService[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeDoctor, setActiveDoctor] = useState<DoctorForService | null>(null);
+  const [reservation, setReservation] = useState<ReservationInfo | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,12 +189,25 @@ export default function BookingDoctorSelectPage() {
       </div>
 
       {/* Booking modal */}
-      {activeDoctor && (
+      {activeDoctor && !reservation && (
         <BookingModal
           doctor={activeDoctor}
           serviceKey={serviceKey}
           serviceLabel={serviceLabel}
           onClose={() => setActiveDoctor(null)}
+          onReserved={(info) => setReservation(info)}
+        />
+      )}
+
+      {/* Checkout modal */}
+      {activeDoctor && reservation && (
+        <CheckoutModal
+          doctor={activeDoctor}
+          serviceLabel={serviceLabel}
+          slot={reservation.slot}
+          reservationId={reservation.reservationId}
+          expiresAt={reservation.expiresAt}
+          onClose={() => { setReservation(null); setActiveDoctor(null); }}
         />
       )}
     </>

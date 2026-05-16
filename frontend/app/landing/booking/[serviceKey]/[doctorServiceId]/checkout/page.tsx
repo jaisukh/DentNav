@@ -3,36 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createOrder, releaseSlot, verifyPayment } from "@/lib/api/booking";
-
-// ─── Razorpay types ───────────────────────────────────────────────────────────
-
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
-  }
-}
-
-type RazorpayOptions = {
-  key: string;
-  amount: number;
-  currency: string;
-  order_id: string;
-  name: string;
-  description: string;
-  handler: (response: RazorpaySuccessResponse) => void;
-  modal: { ondismiss: () => void };
-  prefill?: { name?: string; email?: string };
-  theme?: { color?: string };
-};
-
-type RazorpaySuccessResponse = {
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
-};
-
-type RazorpayInstance = { open: () => void };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,7 +21,7 @@ function loadRazorpayScript(): Promise<void> {
 }
 
 function formatPrice(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: currency.toUpperCase(),
     minimumFractionDigits: 0,
@@ -59,9 +31,13 @@ function formatPrice(amount: number, currency: string) {
 function formatSlotTime(iso: string) {
   const d = new Date(iso);
   return {
-    date: d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
+    date: d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
     time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
   };
+}
+
+function getInitials(name: string) {
+  return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 }
 
 // ─── Countdown timer ──────────────────────────────────────────────────────────
@@ -85,8 +61,6 @@ function useCountdown(expiresAt: string | null) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-// Phases before Pay is clicked use the 5-min reservation window.
-// Once Pay is clicked, createOrder runs and Razorpay takes over timing.
 type Phase = "ready" | "creating" | "paying" | "verifying" | "success" | "expired" | "error";
 
 export default function CheckoutPage() {
@@ -98,6 +72,11 @@ export default function CheckoutPage() {
   const doctorName = searchParams.get("name") ?? "Doctor";
   const reservationExpiresAt = searchParams.get("expires_at") ?? null;
   const reservationId = searchParams.get("reservation_id") ?? null;
+  const previewAmount = Number(searchParams.get("amount") ?? "0");
+  const previewCurrency = searchParams.get("currency") ?? "INR";
+  const serviceName = searchParams.get("service") ?? "";
+  const specialization = searchParams.get("specialization") ?? "";
+  const photoUrl = searchParams.get("photo") ?? "";
   const { serviceKey, doctorServiceId } = params;
 
   const [phase, setPhase] = useState<Phase>("ready");
@@ -107,9 +86,8 @@ export default function CheckoutPage() {
   const paying = useRef(false);
   const secondsLeft = useCountdown(reservationExpiresAt);
 
-  // ── Expire when reservation countdown hits zero (only before order is created) ──
-  // Once createOrder succeeds, the pending_payment booking holds the slot for
-  // 10 min — the reservation countdown is no longer the gate.
+  const displayAmount = order ? order.amount : previewAmount;
+  const displayCurrency = order ? order.currency : previewCurrency;
 
   useEffect(() => {
     if (secondsLeft === 0 && phase === "ready" && !order) {
@@ -118,13 +96,10 @@ export default function CheckoutPage() {
     }
   }, [secondsLeft, phase, order]);
 
-  // ── Pay: create order then open Razorpay ──────────────────────────────────
-
   async function handlePay() {
     if (paying.current || !slotIso) return;
     paying.current = true;
 
-    // Step 1 — create Razorpay order only once; reuse on Razorpay dismissal + retry
     let activeOrder = order;
     if (!activeOrder) {
       setPhase("creating");
@@ -146,7 +121,6 @@ export default function CheckoutPage() {
 
     if (!activeOrder) return;
 
-    // Step 2 — load Razorpay script
     try {
       await loadRazorpayScript();
     } catch {
@@ -195,8 +169,6 @@ export default function CheckoutPage() {
       modal: {
         ondismiss: () => {
           paying.current = false;
-          // Don't cancel the booking — payment may still succeed via Razorpay webhook.
-          // The slot_expires_at (10 min) will free the slot automatically if no payment arrives.
           router.push(`/landing/booking/${serviceKey}`);
         },
       },
@@ -206,12 +178,10 @@ export default function CheckoutPage() {
     rzp.open();
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
   const slot = slotIso ? formatSlotTime(slotIso) : null;
 
   return (
-    <div className="flex w-full max-w-lg flex-col pb-14">
+    <div className="w-full pb-14">
 
       {/* Back */}
       {phase !== "success" && (
@@ -232,7 +202,7 @@ export default function CheckoutPage() {
         </button>
       )}
 
-      {/* ── Success: redirect fires immediately; show brief spinner while navigating ── */}
+      {/* ── Success ── */}
       {phase === "success" && (
         <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-[#94A3B8]">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#E2E8F0] border-t-dent-sky" />
@@ -288,7 +258,7 @@ export default function CheckoutPage() {
       {/* ── Ready / Creating / Paying / Verifying ── */}
       {(phase === "ready" || phase === "creating" || phase === "paying" || phase === "verifying") && (
         <>
-          <header className="mb-8">
+          <header className="mb-6">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#94A3B8]">
               Complete your booking
             </p>
@@ -297,87 +267,176 @@ export default function CheckoutPage() {
             </h1>
           </header>
 
-          {/* Booking summary */}
-          <div className="rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#94A3B8]">Booking details</p>
+          {/* ── Two equal columns, both bottom-aligned ── */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-end">
 
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] text-[#64748B]">Doctor</span>
-                <span className="text-[13px] font-semibold text-dent-ink">{doctorName}</span>
+            {/* LEFT: doctor + appointment details + inclusions */}
+            <div className="flex flex-col gap-4">
+
+              {/* Doctor card */}
+              <div className="flex items-center gap-4 rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
+                {photoUrl ? (
+                  <Image
+                    src={photoUrl}
+                    alt={doctorName}
+                    width={52}
+                    height={52}
+                    className="rounded-full object-cover ring-2 ring-[#F1F5F9]"
+                  />
+                ) : (
+                  <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-dent-ink text-[15px] font-bold text-white">
+                    {getInitials(doctorName)}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate font-display text-[15px] font-bold text-dent-ink">{doctorName}</p>
+                  {specialization && (
+                    <p className="mt-0.5 text-[12px] text-[#64748B]">{specialization}</p>
+                  )}
+                  {serviceName && (
+                    <span className="mt-1.5 inline-block rounded-full bg-sky-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-sky-600">
+                      {serviceName}
+                    </span>
+                  )}
+                </div>
               </div>
-              {slot && (
-                <>
+
+              {/* Appointment details */}
+              <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#94A3B8]">Appointment details</p>
+                <div className="mt-4 space-y-3.5">
+                  {slot && (
+                    <>
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F8FAFF]">
+                          <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 text-dent-sky" aria-hidden>
+                            <rect x="1" y="2" width="14" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+                            <path d="M5 1v2M11 1v2M1 6h14" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-medium text-[#94A3B8]">Date</p>
+                          <p className="text-[13px] font-semibold text-dent-ink">{slot.date}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F8FAFF]">
+                          <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 text-dent-sky" aria-hidden>
+                            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.25" />
+                            <path d="M8 5v3.5l2 2" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-medium text-[#94A3B8]">Time</p>
+                          <p className="text-[13px] font-semibold text-dent-ink">{slot.time}</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* What's included */}
+              <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[#94A3B8]">What&apos;s included</p>
+                <div className="space-y-3">
+                  {[
+                    { icon: "M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z", label: "Instant booking confirmation" },
+                    { icon: "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z", label: "Confirmation email to both parties" },
+                    { icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z", label: "Calendar invite from your doctor" },
+                  ].map(({ icon, label }) => (
+                    <div key={label} className="flex items-center gap-2.5">
+                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+                        <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3 text-emerald-500" aria-hidden>
+                          <path d={icon} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                      <span className="text-[12px] font-medium text-[#475569]">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT: order summary only */}
+            <div className="flex flex-col gap-4">
+              <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#94A3B8]">Order summary</p>
+                <div className="mt-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[13px] text-[#64748B]">Date</span>
-                    <span className="text-[13px] font-semibold text-dent-ink">{slot.date}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[13px] text-[#64748B]">Time</span>
-                    <span className="text-[13px] font-semibold text-dent-ink">{slot.time}</span>
-                  </div>
-                </>
-              )}
-              {order && (
-                <>
-                  <div className="my-1 h-px bg-[#F1F5F9]" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-[13px] font-semibold text-dent-ink">Total</span>
-                    <span className="font-display text-base font-bold text-dent-ink">
-                      {formatPrice(order.amount, order.currency)}
+                    <span className="text-[13px] text-[#64748B]">Consultation</span>
+                    <span className="text-[13px] font-semibold text-dent-ink">
+                      {displayAmount ? formatPrice(displayAmount, displayCurrency) : "—"}
                     </span>
                   </div>
-                </>
-              )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-[#64748B]">Platform fee</span>
+                    <span className="text-[13px] font-medium text-emerald-600">Free</span>
+                  </div>
+                  <div className="h-px bg-[#F1F5F9]" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[14px] font-bold text-dent-ink">Total due</span>
+                    <span className="font-display text-xl font-bold text-dent-ink">
+                      {displayAmount ? formatPrice(displayAmount, displayCurrency) : "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Reservation countdown — only before order is created */}
-          {phase === "ready" && !order && secondsLeft !== null && secondsLeft > 0 && (
-            <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
-              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0 text-amber-500" aria-hidden>
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.75" />
-                <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-              </svg>
-              <p className="text-[12px] font-medium text-amber-700">
-                Slot held for{" "}
-                <span className="font-bold tabular-nums">
-                  {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:
-                  {String(secondsLeft % 60).padStart(2, "0")}
-                </span>
-              </p>
-            </div>
-          )}
+          {/* ── Payment bar — centred below both columns ── */}
+          <div className="mx-auto mt-5 flex w-full max-w-sm flex-col gap-3">
 
-          {/* CTA */}
-          <div className="mt-5">
+            {/* Countdown */}
+            {phase === "ready" && !order && secondsLeft !== null && secondsLeft > 0 && (
+              <div className="flex items-center justify-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-2.5">
+                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0 text-amber-500" aria-hidden>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.75" />
+                  <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                </svg>
+                <p className="text-[12px] font-medium text-amber-700">
+                  Slot held for{" "}
+                  <span className="font-bold tabular-nums">
+                    {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:
+                    {String(secondsLeft % 60).padStart(2, "0")}
+                  </span>
+                  {" "}— complete payment before it expires
+                </p>
+              </div>
+            )}
+
+            {/* CTA */}
             {phase === "ready" && (
               <button
                 type="button"
                 onClick={handlePay}
-                className="w-full rounded-xl bg-dent-ink py-3 text-[13px] font-semibold text-white transition-colors hover:bg-dent-deep"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-dent-ink py-3.5 text-[14px] font-semibold text-white transition-colors hover:bg-dent-deep"
               >
-                Pay now
+                <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden>
+                  <rect x="1" y="5" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M1 9h18" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+                Pay {displayAmount ? formatPrice(displayAmount, displayCurrency) : "now"}
               </button>
             )}
-            {phase === "creating" && (
-              <div className="flex items-center justify-center gap-2 py-3 text-[13px] text-[#94A3B8]">
+            {(phase === "creating" || phase === "paying" || phase === "verifying") && (
+              <div className="flex items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white py-3.5 text-[13px] text-[#94A3B8] shadow-sm">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#E2E8F0] border-t-dent-sky" />
-                Preparing payment…
+                {phase === "creating" && "Preparing payment…"}
+                {phase === "paying" && "Opening payment…"}
+                {phase === "verifying" && "Verifying payment…"}
               </div>
             )}
-            {phase === "paying" && (
-              <div className="flex items-center justify-center gap-2 py-3 text-[13px] text-[#94A3B8]">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#E2E8F0] border-t-dent-sky" />
-                Opening payment…
-              </div>
-            )}
-            {phase === "verifying" && (
-              <div className="flex items-center justify-center gap-2 py-3 text-[13px] text-[#94A3B8]">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#E2E8F0] border-t-dent-sky" />
-                Verifying payment…
-              </div>
-            )}
+
+            {/* Trust */}
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#94A3B8]">
+              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" aria-hidden>
+                <path d="M8 1.5L2 4v4c0 3.31 2.57 6.41 6 7 3.43-.59 6-3.69 6-7V4L8 1.5z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+                <path d="M5.5 8l1.5 1.5 3-3" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Secured by Razorpay · SSL encrypted · No extra charges
+            </div>
           </div>
         </>
       )}

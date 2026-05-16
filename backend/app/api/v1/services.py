@@ -23,6 +23,20 @@ async def list_services(
     return list(result.scalars().all())
 
 
+@router.get("/{service_key}/price")
+async def get_service_price(
+    service_key: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict:
+    result = await session.execute(
+        select(Service).where(Service.service_key == service_key, Service.is_active)
+    )
+    service = result.scalar_one_or_none()
+    if not service:
+        raise HTTPException(status_code=404, detail="Service not found")
+    return {"amount": service.base_amount, "currency": service.currency}
+
+
 @router.get("/{service_key}/doctors", response_model=list[DoctorForServiceResponse])
 async def list_doctors_for_service(
     service_key: str,

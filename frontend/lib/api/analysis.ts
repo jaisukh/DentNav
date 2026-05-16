@@ -43,6 +43,17 @@ export type MyAnswersPayload = {
   answers: Record<string, AnswerValue>;
 };
 
+/** Returns the full LLM payload — requires a succeeded analysis_access payment. */
+export async function fetchMyAnalysisFull(): Promise<Record<string, unknown>> {
+  const res = await fetch(API_ROUTES.myAnalysisFull, {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Full analysis fetch failed: ${res.status}`);
+  return res.json() as Promise<Record<string, unknown>>;
+}
+
 /** Returns raw answers + questionnaire doc for the signed-in user's latest analysis. */
 export async function fetchMyAnalysisAnswers(): Promise<MyAnswersPayload> {
   const res = await fetch(API_ROUTES.myAnalysisAnswers, {

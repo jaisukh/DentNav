@@ -151,3 +151,50 @@ export async function verifyPayment(
   if (!res.ok) throw new Error(`Verify payment failed: ${res.status}`);
   return res.json() as Promise<VerifyPaymentResponse>;
 }
+
+// ── Analysis access (one-time purchase) ───────────────────────────────────────
+
+export type AccessPriceResponse = {
+  amount: number;
+  currency: string;
+};
+
+export async function fetchAnalysisAccessPrice(serviceKey: string): Promise<AccessPriceResponse> {
+  const res = await fetch(API_ROUTES.servicePrice(serviceKey), { method: "GET" });
+  if (!res.ok) throw new Error(`Price fetch failed: ${res.status}`);
+  return res.json() as Promise<AccessPriceResponse>;
+}
+
+export type AccessOrderResponse = {
+  order_id: string;
+  amount: number;
+  currency: string;
+};
+
+export async function createAnalysisAccessOrder(): Promise<AccessOrderResponse> {
+  const res = await fetch(API_ROUTES.accessCreateOrder, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (res.status === 409) throw new Error("already_paid");
+  if (!res.ok) throw new Error(`Create access order failed: ${res.status}`);
+  return res.json() as Promise<AccessOrderResponse>;
+}
+
+export async function verifyAnalysisAccessPayment(
+  razorpayOrderId: string,
+  razorpayPaymentId: string,
+  razorpaySignature: string,
+): Promise<void> {
+  const res = await fetch(API_ROUTES.accessVerifyPayment, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      razorpay_order_id: razorpayOrderId,
+      razorpay_payment_id: razorpayPaymentId,
+      razorpay_signature: razorpaySignature,
+    }),
+  });
+  if (!res.ok) throw new Error(`Verify access payment failed: ${res.status}`);
+}

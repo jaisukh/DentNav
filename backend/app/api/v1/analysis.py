@@ -1,9 +1,11 @@
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
+from app.models.payment import Payment
 from app.schemas.analysis import (
     AnalysisAccessStatusResponse,
     AnalysisPreviewResponse,
@@ -54,6 +56,15 @@ async def post_analysis(
             detail=[{"loc": list(e.loc), "msg": e.msg} for e in errors],
         )
 
+    user_id = _current_user_id(request)
+
+    # Signed-in user who already has an analysis: return existing preview,
+    # no LLM call made.
+    if user_id:
+        existing = await get_latest_analysis_for_user(session, user_id)
+        if existing:
+            return AnalysisPreviewResponse.model_validate(build_preview(existing))
+
     try:
         full_payload = await generate_analysis_from_answers(answers)
     except Exception as exc:
@@ -61,7 +72,6 @@ async def post_analysis(
             status_code=502, detail=f"Failed to generate analysis: {exc}"
         ) from exc
 
-    user_id = _current_user_id(request)
     analysis = await create_analysis(
         session,
         answers=dict(answers),
@@ -94,22 +104,22 @@ async def get_analysis_access_status(
     # `delete_stale_unclaimed_for_double_submit` only deletes Analysis rows;
     # `user` is still valid here (commit happened on the `analyses` table).
     analysis = await get_latest_analysis_for_user(session, user_id)
-    # `user.has_filled_questionnaire` is authoritative; `analysis is not None` covers
-    # legacy rows if the flag ever drifted.
     has_answered = user.has_filled_questionnaire or (analysis is not None)
-    if analysis is None:
-        return AnalysisAccessStatusResponse(
-            signedIn=True,
-            hasAnsweredQuestionnaire=has_answered,
-            hasPaid=False,
-            latestAnalysisId=None,
+
+    access_pay = await session.execute(
+        select(Payment).where(
+            Payment.user_id == user_id,
+            Payment.status == "succeeded",
+            Payment.metadata_["type"].as_string() == "analysis_access",
         )
+    )
+    has_paid = access_pay.scalar_one_or_none() is not None
 
     return AnalysisAccessStatusResponse(
         signedIn=True,
         hasAnsweredQuestionnaire=has_answered,
-        hasPaid=False,
-        latestAnalysisId=analysis.id,
+        hasPaid=has_paid,
+        latestAnalysisId=analysis.id if analysis else None,
     )
 
 
@@ -156,6 +166,36 @@ async def get_my_answers(
         ) from exc
     answers = analysis.answers if isinstance(analysis.answers, dict) else {}
     return {"questionnaire": doc.model_dump(mode="json"), "answers": answers}
+
+
+@router.get("/me/full")
+async def get_my_full_analysis(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, Any]:
+    """
+    Returns the full LLM payload for the signed-in user's latest analysis.
+    Requires a succeeded `analysis_access` payment — 403 if not paid.
+    """
+    user_id = _current_user_id(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+
+    access_pay = await session.execute(
+        select(Payment).where(
+            Payment.user_id == user_id,
+            Payment.status == "succeeded",
+            Payment.metadata_["type"].as_string() == "analysis_access",
+        )
+    )
+    if access_pay.scalar_one_or_none() is None:
+        raise HTTPException(status_code=403, detail="Payment required")
+
+    analysis = await get_latest_analysis_for_user(session, user_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="No analysis on file")
+
+    return analysis.llm_result
 
 
 @router.get("/{analysis_id}/full")

@@ -32,3 +32,22 @@ class VerifyPaymentResponse(BaseModel):
     slot_time: datetime
     doctor_name: str
     calendly_invitee_uri: str | None = None
+
+
+# ── Analysis access (one-time purchase) ───────────────────────────────────────
+
+
+class CreateAccessOrderResponse(BaseModel):
+    order_id: str
+    amount: int
+    currency: str
+
+
+class VerifyAccessPaymentRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+
+
+class VerifyAccessPaymentResponse(BaseModel):
+    ok: bool

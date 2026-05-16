@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { LandingPromptCard } from "@/components/landing/LandingPromptCard";
 
@@ -45,7 +47,7 @@ export function PaymentPrompt() {
           href="/landing/analysis?source=server"
           className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-white px-6 py-3.5 text-sm font-semibold text-dent-ink shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-200 hover:border-dent-sky/40 hover:bg-dent-badge-bg/50 active:scale-[0.98]"
         >
-          Preview your analysis
+          View analysis preview
         </Link>
       </div>
     </LandingPromptCard>

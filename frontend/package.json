@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=8192' npx next dev --webpack",
-    "build": "npx next build",
+    "build": "npx next build --webpack",
     "start": "npx next start",
     "lint": "npx eslint .",
     "docker:up": "docker compose up --build",

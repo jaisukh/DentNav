@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -12,16 +13,21 @@ from app.db.session import async_session_factory, get_session
 from app.models.booking import Booking
 from app.models.doctor_service import DoctorService
 from app.models.payment import Payment
+from app.models.service import Service
 from app.models.slot_reservation import SlotReservation
 from app.models.user import User
 from app.schemas.payment import (
     CancelOrderRequest,
+    CreateAccessOrderResponse,
     CreateOrderRequest,
     CreateOrderResponse,
+    VerifyAccessPaymentRequest,
+    VerifyAccessPaymentResponse,
     VerifyPaymentRequest,
     VerifyPaymentResponse,
 )
 from app.services import razorpay_client
+from app.services.analysis_store import get_latest_analysis_for_user
 from app.services.calendly import create_invitee
 from app.services.session import verify_session_token
 from app.services.ws_manager import ws_manager
@@ -316,6 +322,112 @@ async def _create_calendly_event(booking_id: str) -> None:
         booking.scheduled_at = booking.slot_time
         await session.commit()
         _log.info("Calendly invitee created for booking %s: %s", booking_id, event_uri)
+
+
+
+@router.post("/access/create-order", response_model=CreateAccessOrderResponse)
+async def create_access_order(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> CreateAccessOrderResponse:
+    """Create a Razorpay order for the one-time analysis access purchase."""
+    user_id = _require_user(request)
+
+    if not settings.has_razorpay_config:
+        raise HTTPException(status_code=503, detail="Payment gateway not configured")
+
+    # Idempotency: if they already have a succeeded access payment, reject
+    existing = await session.execute(
+        select(Payment).where(
+            Payment.user_id == user_id,
+            Payment.status == "succeeded",
+            Payment.metadata_["type"].as_string() == "analysis_access",
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="already_paid")
+
+    # reference_id points to the analysis this payment unlocks
+    analysis = await get_latest_analysis_for_user(session, user_id)
+    if analysis is None:
+        raise HTTPException(status_code=409, detail="no_analysis_on_file")
+
+    # Fetch price from services table — single source of truth
+    analysis_service_key = os.getenv("NEXT_PUBLIC_SERVICE_KEY_ANALYSIS_ACCESS", "analysis_access")
+    svc_result = await session.execute(
+        select(Service).where(
+            Service.service_key == analysis_service_key,
+            Service.is_active,
+        )
+    )
+    svc = svc_result.scalar_one_or_none()
+    if svc is None:
+        raise HTTPException(status_code=503, detail="Analysis access service not configured")
+
+    amount = svc.base_amount
+    currency = svc.currency
+    payment_id = str(uuid.uuid4())
+
+    try:
+        order = razorpay_client.create_order(
+            amount=amount,
+            currency=currency,
+            receipt=payment_id,
+            notes={"payment_id": payment_id, "user_id": user_id, "type": "analysis_access"},
+        )
+    except Exception as exc:
+        _log.error("Razorpay create_order (access) failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=502, detail="Failed to create payment order") from exc
+
+    payment = Payment(
+        id=payment_id,
+        user_id=user_id,
+        doctor_service_id=None,
+        reference_id=analysis.id,
+        razorpay_order_id=order["id"],
+        amount=amount,
+        currency=currency,
+        status="pending",
+        metadata_={"type": "analysis_access"},
+    )
+    session.add(payment)
+    await session.commit()
+
+    return CreateAccessOrderResponse(order_id=order["id"], amount=amount, currency=currency)
+
+
+@router.post("/access/verify", response_model=VerifyAccessPaymentResponse)
+async def verify_access_payment(
+    body: VerifyAccessPaymentRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> VerifyAccessPaymentResponse:
+    """Verify Razorpay payment for the one-time analysis access purchase."""
+    _require_user(request)
+
+    if not razorpay_client.verify_signature(
+        body.razorpay_order_id, body.razorpay_payment_id, body.razorpay_signature
+    ):
+        raise HTTPException(status_code=400, detail="signature_mismatch")
+
+    pay_result = await session.execute(
+        select(Payment).where(Payment.razorpay_order_id == body.razorpay_order_id)
+    )
+    payment = pay_result.scalar_one_or_none()
+    if not payment:
+        raise HTTPException(status_code=404, detail="payment_not_found")
+
+    if payment.status == "succeeded":
+        return VerifyAccessPaymentResponse(ok=True)
+
+    payment.status = "succeeded"
+    payment.razorpay_payment_id = body.razorpay_payment_id
+    payment.razorpay_signature = body.razorpay_signature
+    payment.updated_at = datetime.now(UTC)
+    await session.commit()
+
+    _log.info("Analysis access payment verified for user %s", payment.user_id)
+    return VerifyAccessPaymentResponse(ok=True)
 
 
 @router.post("/webhook/razorpay", status_code=200)

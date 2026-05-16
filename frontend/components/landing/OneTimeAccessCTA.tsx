@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
+import { AnalysisAccessModal } from "@/components/landing/AnalysisAccessModal";
+import { AnswersPreviewModal } from "@/components/ui/AnswersPreviewModal";
 import { useAuthStatus } from "@/lib/auth-status-context";
 
 function Arrow({ className = "h-4 w-4" }: { className?: string }) {
@@ -24,17 +27,10 @@ const PRIMARY_BTN =
 const SECONDARY_BTN =
   "flex w-full items-center justify-center rounded-xl border border-white/15 py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/30 hover:text-white";
 
-/**
- * Right-hand CTA panel for the "One-time access" pathway analysis card.
- *
- * Buttons depend on the user's account state:
- * - Anonymous / unverified  -> "Go to questionnaire"
- * - Filled, not paid        -> "Get access" + "Preview your analysis" (link to analysis page)
- * - Filled, paid            -> "View analysis" + "Preview your analysis" (link to analysis page)
- * - Signed in, not filled   -> "Go to questionnaire"
- */
 export function OneTimeAccessCTA() {
   const auth = useAuthStatus();
+  const [accessModalOpen, setAccessModalOpen] = useState(false);
+  const [answersOpen, setAnswersOpen] = useState(false);
 
   const helperCopy = !auth.ready
     ? "Checking your access…"
@@ -56,23 +52,30 @@ export function OneTimeAccessCTA() {
     ready: auth.ready,
     hasAnsweredQuestionnaire: auth.hasAnsweredQuestionnaire,
     hasPaid: auth.hasPaid,
+    onGetAccess: () => setAccessModalOpen(true),
+    onViewResponse: () => setAnswersOpen(true),
   });
 
   return (
-    <div className="flex flex-col items-center justify-center text-center lg:pl-12">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-[#7DD3FC] ring-1 ring-white/15">
-        <IconAnalysis />
+    <>
+      <div className="flex flex-col items-center justify-center text-center lg:pl-12">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-[#7DD3FC] ring-1 ring-white/15">
+          <IconAnalysis />
+        </div>
+
+        <p className="mt-5 font-display text-lg font-bold text-white">
+          {headlineCopy}
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-white/60">
+          {helperCopy}
+        </p>
+
+        <div className="mt-8 flex w-full flex-col gap-3">{buttons}</div>
       </div>
 
-      <p className="mt-5 font-display text-lg font-bold text-white">
-        {headlineCopy}
-      </p>
-      <p className="mt-2 text-sm leading-relaxed text-white/60">
-        {helperCopy}
-      </p>
-
-      <div className="mt-8 flex w-full flex-col gap-3">{buttons}</div>
-    </div>
+      {accessModalOpen && <AnalysisAccessModal onClose={() => setAccessModalOpen(false)} />}
+      <AnswersPreviewModal open={answersOpen} onClose={() => setAnswersOpen(false)} />
+    </>
   );
 }
 
@@ -80,6 +83,8 @@ function renderButtons(flags: {
   ready: boolean;
   hasAnsweredQuestionnaire: boolean;
   hasPaid: boolean;
+  onGetAccess: () => void;
+  onViewResponse: () => void;
 }) {
   if (!flags.ready) {
     return (
@@ -110,7 +115,7 @@ function renderButtons(flags: {
   if (flags.hasPaid) {
     return (
       <>
-        <Link href="/landing" className={PRIMARY_BTN}>
+        <Link href="/landing/analysis?source=server" className={PRIMARY_BTN}>
           <span className="dentnav-cta-primary__halo" aria-hidden />
           <span className="dentnav-cta-primary__shine" aria-hidden />
           <span className="relative z-10 flex items-center gap-2.5">
@@ -118,26 +123,26 @@ function renderButtons(flags: {
             <Arrow className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </span>
         </Link>
-        <Link href="/landing/analysis?source=server" className={SECONDARY_BTN}>
-          Preview your analysis
-        </Link>
+        <button type="button" onClick={flags.onViewResponse} className={SECONDARY_BTN}>
+          View your response
+        </button>
       </>
     );
   }
 
   return (
     <>
-      <Link href="/landing/packages#checkout" className={PRIMARY_BTN}>
+      <button type="button" onClick={flags.onGetAccess} className={PRIMARY_BTN}>
         <span className="dentnav-cta-primary__halo" aria-hidden />
         <span className="dentnav-cta-primary__shine" aria-hidden />
         <span className="relative z-10 flex items-center gap-2.5">
           Get access
           <Arrow className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
         </span>
-      </Link>
-      <Link href="/landing/analysis?source=server" className={SECONDARY_BTN}>
-        Preview your analysis
-      </Link>
+      </button>
+      <button type="button" onClick={flags.onViewResponse} className={SECONDARY_BTN}>
+        View your response
+      </button>
     </>
   );
 }
