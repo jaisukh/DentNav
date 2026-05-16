@@ -1,6 +1,6 @@
 """Calendly API client — all calls are per-doctor using their PAT."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -9,7 +9,7 @@ _TIMEOUT = 10.0
 
 
 def _fmt(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
 
 
 async def get_available_slots(
@@ -37,44 +37,37 @@ async def get_available_slots(
         return r.json().get("collection", [])
 
 
-async def create_scheduled_event(
+async def create_invitee(
     event_type_uri: str,
     pat: str,
     start_time: datetime,
-    end_time: datetime,
     invitee_name: str,
     invitee_email: str,
 ) -> tuple[str, str]:
     """
-    Creates a Calendly scheduled event and returns (event_uri, cancel_url).
+    Books a Calendly slot via POST /invitees and returns (event_uri, cancel_url).
 
-    Requires a Calendly Teams or Enterprise plan — the PAT must have the
-    scheduled_events:write scope.  Calendly sends confirmation emails with
-    the meeting link to both the doctor and the invitee automatically.
+    Requires a paid Calendly plan (any tier). Works with a standard PAT.
+    Calendly automatically sends calendar invites and confirmation emails to
+    both the doctor and the invitee.
     """
-    headers = {"Authorization": f"Bearer {pat}"}
     payload = {
-        "start_time": _fmt(start_time),
-        "end_time": _fmt(end_time),
         "event_type": event_type_uri,
-        "invitees": [{"name": invitee_name, "email": invitee_email}],
+        "start_time": _fmt(start_time),
+        "invitee": {
+            "name": invitee_name,
+            "email": invitee_email,
+        },
     }
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         r = await client.post(
-            f"{_BASE}/scheduled_events",
-            headers=headers,
+            f"{_BASE}/invitees",
+            headers={"Authorization": f"Bearer {pat}"},
             json=payload,
         )
         r.raise_for_status()
-        event_uri: str = r.json()["resource"]["uri"]
-        event_uuid = event_uri.rsplit("/", 1)[-1]
-
-        inv_r = await client.get(
-            f"{_BASE}/scheduled_events/{event_uuid}/invitees",
-            headers=headers,
-        )
-        inv_r.raise_for_status()
-        collection = inv_r.json().get("collection", [])
-        cancel_url: str = collection[0]["cancel_url"] if collection else ""
+        resource = r.json()["resource"]
+        event_uri: str = resource["event"]
+        cancel_url: str = resource["cancel_url"]
 
     return event_uri, cancel_url

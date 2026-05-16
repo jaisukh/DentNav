@@ -30,5 +30,5 @@ class DoctorService(Base):
         nullable=False,
     )
 
-    doctor: Mapped["Doctor"] = relationship("Doctor", lazy="joined")  # type: ignore[name-defined]
-    service: Mapped["Service"] = relationship("Service", lazy="joined")  # type: ignore[name-defined]
+    doctor: Mapped["Doctor"] = relationship("Doctor", lazy="joined")  # type: ignore[name-defined]  # noqa: F821
+    service: Mapped["Service"] = relationship("Service", lazy="joined")  # type: ignore[name-defined]  # noqa: F821

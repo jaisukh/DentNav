@@ -1,9 +1,7 @@
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
-
-_log = logging.getLogger(__name__)
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import select, update
@@ -24,9 +22,11 @@ from app.schemas.payment import (
     VerifyPaymentResponse,
 )
 from app.services import razorpay_client
-from app.services.calendly import create_scheduled_event
+from app.services.calendly import create_invitee
 from app.services.session import verify_session_token
 from app.services.ws_manager import ws_manager
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -58,7 +58,7 @@ async def create_order(
             SlotReservation.doctor_service_id == body.doctor_service_id,
             SlotReservation.slot_time == body.slot_time,
             SlotReservation.user_id == user_id,
-            SlotReservation.expires_at > datetime.now(timezone.utc),
+            SlotReservation.expires_at > datetime.now(UTC),
         )
     )
     reservation = res_result.scalar_one_or_none()
@@ -79,7 +79,7 @@ async def create_order(
     amount = ds.price_override if ds.price_override is not None else ds.service.base_amount
     currency = ds.service.currency
 
-    slot_expires_at = datetime.now(timezone.utc) + timedelta(minutes=_BOOKING_TTL_MINUTES)
+    slot_expires_at = datetime.now(UTC) + timedelta(minutes=_BOOKING_TTL_MINUTES)
 
     booking_id = str(uuid.uuid4())
     payment_id = str(uuid.uuid4())
@@ -98,7 +98,7 @@ async def create_order(
         )
     except Exception as exc:
         _log.error("Razorpay create_order failed: %s", exc, exc_info=True)
-        raise HTTPException(status_code=502, detail="Failed to create payment order")
+        raise HTTPException(status_code=502, detail="Failed to create payment order") from exc
 
     # Create booking + payment rows atomically, with razorpay_order_id already set
     booking = Booking(
@@ -161,7 +161,7 @@ async def cancel_order(
     doctor_service_id = booking.doctor_service_id
     slot_time_iso = booking.slot_time.isoformat()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await session.execute(
         update(Booking)
         .where(Booking.id == body.booking_id)
@@ -209,7 +209,7 @@ async def verify_payment(
         )
 
     # Step 3 — Atomic slot confirm (eliminates TOCTOU race)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     confirm_stmt = (
         update(Booking)
         .where(
@@ -236,7 +236,9 @@ async def verify_payment(
             razorpay_client.refund_payment(body.razorpay_payment_id, payment.amount)
             _log.info("Refund initiated for payment %s (slot expired)", body.razorpay_payment_id)
         except Exception as exc:
-            _log.error("Refund failed for payment %s: %s", body.razorpay_payment_id, exc, exc_info=True)
+            _log.error(
+                "Refund failed for payment %s: %s", body.razorpay_payment_id, exc, exc_info=True
+            )
         raise HTTPException(
             status_code=409,
             detail="slot_expired",
@@ -287,38 +289,33 @@ async def _create_calendly_event(booking_id: str) -> None:
             return
 
         doctor = ds.doctor
-        service = ds.service
 
         if not doctor or not doctor.calendly_pat:
             _log.warning("Skipping Calendly event for booking %s — doctor has no PAT", booking_id)
             return
 
-        duration_minutes = service.duration_minutes if service else 60
-        start_time = booking.slot_time
-        end_time = start_time + timedelta(minutes=duration_minutes or 60)
         full_name = f"{user.first_name} {user.last_name}".strip() or user.email
 
         try:
-            event_uri, cancel_url = await create_scheduled_event(
+            event_uri, cancel_url = await create_invitee(
                 event_type_uri=ds.calendly_event_type_uri,
                 pat=doctor.calendly_pat,
-                start_time=start_time,
-                end_time=end_time,
+                start_time=booking.slot_time,
                 invitee_name=full_name,
                 invitee_email=user.email,
             )
         except Exception as exc:
             _log.error(
-                "Calendly event creation failed for booking %s: %s",
+                "Calendly invitee creation failed for booking %s: %s",
                 booking_id, exc, exc_info=True,
             )
             return
 
         booking.calendly_event_uri = event_uri
         booking.calendly_invitee_uri = cancel_url
-        booking.scheduled_at = start_time
+        booking.scheduled_at = booking.slot_time
         await session.commit()
-        _log.info("Calendly event created for booking %s: %s", booking_id, event_uri)
+        _log.info("Calendly invitee created for booking %s: %s", booking_id, event_uri)
 
 
 @router.post("/webhook/razorpay", status_code=200)
@@ -336,7 +333,7 @@ async def razorpay_webhook(
     try:
         payload = await request.json()
     except Exception:
-        raise HTTPException(status_code=400, detail="invalid_payload")
+        raise HTTPException(status_code=400, detail="invalid_payload") from None
 
     event = payload.get("event")
 
@@ -354,7 +351,6 @@ async def _handle_payment_captured(
     payload: dict, background_tasks: BackgroundTasks, session: AsyncSession
 ) -> None:
     entity = payload["payload"]["payment"]["entity"]
-    order_id = entity["id"]         # this is actually payment_id in Razorpay's payload
     razorpay_payment_id = entity["id"]
     razorpay_order_id = entity["order_id"]
 
@@ -365,7 +361,7 @@ async def _handle_payment_captured(
     if not payment or payment.status in ("succeeded", "refund_pending", "refunded"):
         return  # not found or already processed — idempotent no-op
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Atomic slot confirm — same guard as /verify
     confirm_stmt = (
@@ -414,7 +410,7 @@ async def _handle_payment_failed(payload: dict, session: AsyncSession) -> None:
     if not payment or payment.status in ("succeeded", "failed", "refund_pending", "refunded"):
         return
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payment.status = "failed"
     payment.metadata_ = {
         "error_code": entity.get("error_code"),
@@ -459,5 +455,5 @@ async def _handle_refund_processed(payload: dict, session: AsyncSession) -> None
     # Transitions refund_pending → refunded (or any other status that somehow
     # ended up with a Razorpay refund we weren't expecting)
     payment.status = "refunded"
-    payment.updated_at = datetime.now(timezone.utc)
+    payment.updated_at = datetime.now(UTC)
     await session.commit()

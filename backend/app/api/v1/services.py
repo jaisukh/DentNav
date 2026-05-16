@@ -18,7 +18,7 @@ async def list_services(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[Service]:
     result = await session.execute(
-        select(Service).where(Service.is_active == True).order_by(Service.created_at)
+        select(Service).where(Service.is_active).order_by(Service.created_at)
     )
     return list(result.scalars().all())
 
@@ -29,7 +29,7 @@ async def list_doctors_for_service(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[DoctorForServiceResponse]:
     service_result = await session.execute(
-        select(Service).where(Service.service_key == service_key, Service.is_active == True)
+        select(Service).where(Service.service_key == service_key, Service.is_active)
     )
     service = service_result.scalar_one_or_none()
     if not service:
@@ -40,8 +40,8 @@ async def list_doctors_for_service(
         .join(Doctor, DoctorService.doctor_id == Doctor.id)
         .where(
             DoctorService.service_id == service.id,
-            DoctorService.is_active == True,
-            Doctor.is_active == True,
+            DoctorService.is_active,
+            Doctor.is_active,
         )
         .order_by(Doctor.name)
     )
@@ -55,7 +55,9 @@ async def list_doctors_for_service(
             bio=ds.doctor.bio,
             photo_url=ds.doctor.photo_url,
             specializations=ds.doctor.specializations,
-            effective_amount=ds.price_override if ds.price_override is not None else service.base_amount,
+            effective_amount=(
+                ds.price_override if ds.price_override is not None else service.base_amount
+            ),
             currency=service.currency,
         )
         for ds in rows

@@ -39,7 +39,7 @@ export function RadioField({ question, value, onChange }: Props) {
       ) : null}
 
       {isBinary ? (
-        <div className="flex w-full justify-center gap-8">
+        <div className="flex w-full pl-8 gap-8">
           {opts.map((opt) => (
             <button
               key={opt}

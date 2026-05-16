@@ -113,6 +113,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (secondsLeft === 0 && phase === "ready" && !order) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPhase("expired");
     }
   }, [secondsLeft, phase, order]);

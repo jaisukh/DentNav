@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -72,7 +72,7 @@ async def reserve_slot(
     ds_result = await session.execute(
         select(DoctorService).where(
             DoctorService.id == body.doctor_service_id,
-            DoctorService.is_active == True,
+            DoctorService.is_active,
         )
     )
     if not ds_result.scalar_one_or_none():
@@ -91,7 +91,7 @@ async def reserve_slot(
 
     # Atomic conditional upsert — only overwrites an expired reservation
     new_id = str(uuid.uuid4())
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=_RESERVATION_TTL_MINUTES)
+    expires_at = datetime.now(UTC) + timedelta(minutes=_RESERVATION_TTL_MINUTES)
 
     stmt = (
         pg_insert(SlotReservation)

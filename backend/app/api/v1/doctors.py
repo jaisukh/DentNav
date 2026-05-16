@@ -1,7 +1,16 @@
-from datetime import date, datetime, time, timedelta, timezone
+import logging
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +22,8 @@ from app.schemas.doctor import SlotResponse
 from app.services.calendly import get_available_slots
 from app.services.session import verify_session_token
 from app.services.ws_manager import ws_manager
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
@@ -38,14 +49,16 @@ async def get_availability(
     _require_user(request)
 
     if (date_to - date_from).days > _MAX_DATE_RANGE_DAYS:
-        raise HTTPException(status_code=400, detail=f"Date range cannot exceed {_MAX_DATE_RANGE_DAYS} days")
+        raise HTTPException(
+            status_code=400, detail=f"Date range cannot exceed {_MAX_DATE_RANGE_DAYS} days"
+        )
     if date_to < date_from:
         raise HTTPException(status_code=400, detail="date_to must be >= date_from")
 
     ds_result = await session.execute(
         select(DoctorService).where(
             DoctorService.id == doctor_service_id,
-            DoctorService.is_active == True,
+            DoctorService.is_active,
         )
     )
     ds = ds_result.scalar_one_or_none()
@@ -56,9 +69,9 @@ async def get_availability(
     if not doctor.is_active or not doctor.calendly_pat:
         raise HTTPException(status_code=404, detail="Doctor not available")
 
-    now = datetime.now(timezone.utc)
-    start_dt = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
-    end_dt = datetime.combine(date_to, time.max, tzinfo=timezone.utc)
+    now = datetime.now(UTC)
+    start_dt = datetime.combine(date_from, time.min, tzinfo=UTC)
+    end_dt = datetime.combine(date_to, time.max, tzinfo=UTC)
     effective_start = max(start_dt, now + timedelta(minutes=5))
 
     if effective_start >= end_dt:
@@ -72,10 +85,11 @@ async def get_availability(
             end_time=end_dt,
         )
     except Exception as exc:
-        import logging
         body = getattr(getattr(exc, "response", None), "text", "")
-        logging.getLogger(__name__).error("Calendly availability error: %s | body: %s", exc, body)
-        raise HTTPException(status_code=502, detail="Failed to fetch availability from Calendly")
+        _log.error("Calendly availability error: %s | body: %s", exc, body)
+        raise HTTPException(
+            status_code=502, detail="Failed to fetch availability from Calendly"
+        ) from exc
 
     # Calendly's "start time increment" setting may be shorter than the event duration
     # (e.g. 30-min increments for a 45-min event). Drop any slot that starts within
@@ -155,5 +169,5 @@ async def availability_ws(doctor_service_id: str, websocket: WebSocket) -> None:
 
 def _to_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)

@@ -155,13 +155,14 @@ export function BookingModal({ doctor, serviceKey, serviceLabel, onClose }: Book
         })
         .catch(() => {});
     },
-    [doctor.doctor_service_id]
+    [doctor.doctor_service_id, setSelectedSlot]
   );
 
   // ── Fetch slots when date changes ──────────────────────────────────────────
 
   useEffect(() => {
     if (!selectedDate) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingSlots(true);
     setSlots([]);
     setSelectedSlot(null);
@@ -204,7 +205,7 @@ export function BookingModal({ doctor, serviceKey, serviceLabel, onClose }: Book
 
   // ── WebSocket ──────────────────────────────────────────────────────────────
 
-  const updateSlotStatus = useCallback((slotTime: string, status: SlotStatus) => {
+  const updateSlotStatus = useCallback((slotTime: string, status: SlotStatus) => {  // eslint-disable-line react-hooks/preserve-manual-memoization
     const tsMs = new Date(slotTime).getTime();
     setSlots((prev) =>
       prev.map((s) =>
