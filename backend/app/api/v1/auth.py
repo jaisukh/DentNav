@@ -1,4 +1,5 @@
 import re
+import urllib.parse
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -141,17 +142,25 @@ async def google_callback(
         else:
             await claim_analysis(session, analysis_id, user_id)
 
-    target = f"{settings.frontend_base_url}/landing"
-    if reclaimed_existing:
-        target = f"{target}?reclaimed_existing=1"
-    response = RedirectResponse(url=target)
     secure, samesite = _session_cookie_kwargs()
+    jwt_token = create_session_token(user_id)
 
-    # Signed JWT, NOT a raw UUID, so cookie-injection alone cannot impersonate
-    # any user. The cookie is httpOnly + SameSite, refreshed for 30 days.
+    # Redirect via the frontend relay (/api/auth/session) so the Next.js Edge
+    # middleware can read the session cookie. The backend sets its own copy of
+    # the cookie for cross-origin API calls; the relay sets a second copy on
+    # the frontend domain so the middleware finds it (cookies are scoped to the
+    # domain that set them, so a backend-domain cookie is invisible to the
+    # frontend Edge middleware in production).
+    relay_qs = f"?token={urllib.parse.quote(jwt_token, safe='')}"
+    if reclaimed_existing:
+        relay_qs += "&reclaimed_existing=1"
+    response = RedirectResponse(
+        url=f"{settings.frontend_base_url}/api/auth/session{relay_qs}"
+    )
+    # Backend-domain copy — used by `credentials: 'include'` API calls.
     response.set_cookie(
         key="dentnav_user_id",
-        value=create_session_token(user_id),
+        value=jwt_token,
         max_age=60 * 60 * 48,
         httponly=True,
         samesite=samesite,

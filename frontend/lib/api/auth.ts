@@ -18,12 +18,10 @@ export function getGoogleSignInUrl(): string {
 }
 
 export async function signOut(): Promise<void> {
-  try {
-    await fetch(API_ROUTES.googleLogout, {
-      method: "POST",
-      credentials: "include",
-    });
-  } catch {
-    // Ignore network errors here; caller still redirects user to public page.
-  }
+  await Promise.allSettled([
+    // Clear the backend-domain session cookie (for API calls).
+    fetch(API_ROUTES.googleLogout, { method: "POST", credentials: "include" }),
+    // Clear the frontend-domain session cookie (read by the Edge middleware).
+    fetch("/api/auth/clear-session", { method: "POST" }),
+  ]);
 }
