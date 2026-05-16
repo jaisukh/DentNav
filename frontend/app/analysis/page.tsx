@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AnalysisView } from "@/components/analysis/AnalysisView";
+import { InfoToast } from "@/components/ui/InfoToast";
+import { fetchMyAnalysisPreview } from "@/lib/api/analysis";
 import {
   analysisHandoffStorageKey,
   clearAnalysisResultFromSession,
@@ -12,12 +14,17 @@ import type { AnalysisPreviewPayload } from "@/lib/analysis.types";
 export default function AnalysisPage() {
   const [data, setData] = useState<AnalysisPreviewPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reclaimedToast, setReclaimedToast] = useState(false);
+  const dismissReclaimed = useCallback(() => setReclaimedToast(false), []);
 
   useEffect(() => {
     let cancelled = false;
 
     const params = new URLSearchParams(window.location.search);
     const handoffId = params.get("h");
+    const fromServer = params.get("source") === "server";
+    const reclaimed = params.get("reclaimed_existing") === "1";
+
     if (handoffId) {
       const raw = sessionStorage.getItem(analysisHandoffStorageKey(handoffId));
       if (raw) {
@@ -57,12 +64,36 @@ export default function AnalysisPage() {
       };
     }
 
+    if (fromServer || !handoffId) {
+      if (reclaimed) queueMicrotask(() => { if (!cancelled) setReclaimedToast(true); });
+      fetchMyAnalysisPreview()
+        .then((payload) => {
+          if (!cancelled) {
+            setData(payload);
+            if (
+              window.location.pathname === "/analysis" &&
+              window.location.search.length > 0
+            ) {
+              window.history.replaceState(null, "", "/analysis");
+            }
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setError(
+              "No analysis on file. Please complete the questionnaire to generate one.",
+            );
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     queueMicrotask(() => {
       if (!cancelled) {
         setError(
-          handoffId
-            ? "We couldn't load your results. The server request may have failed, or storage was unavailable. Please return to the questionnaire and try again."
-            : "No analysis to display. Please complete the questionnaire.",
+          "We couldn't load your results. Please return to the questionnaire and try again.",
         );
       }
     });
@@ -87,5 +118,16 @@ export default function AnalysisPage() {
     );
   }
 
-  return <AnalysisView data={data} />;
+  return (
+    <>
+      <InfoToast
+        open={reclaimedToast}
+        onDismiss={dismissReclaimed}
+        title="You already have an analysis on file"
+        body="We're showing your previous results. Only one analysis is stored per account."
+        tone="sky"
+      />
+      <AnalysisView data={data} />
+    </>
+  );
 }

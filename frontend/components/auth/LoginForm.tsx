@@ -1,9 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getGoogleSignInUrl } from "@/lib/api/auth";
 
+const ERROR_MESSAGES: Record<string, string> = {
+  access_denied: "Sign-in was cancelled. Please try again.",
+};
+
 export function LoginForm() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
   const [busy, setBusy] = useState(false);
 
   function handleGoogleSignIn() {
@@ -14,6 +21,11 @@ export function LoginForm() {
 
   return (
     <div className="flex flex-col gap-5">
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700">
+          {ERROR_MESSAGES[error] ?? "Something went wrong. Please try again."}
+        </div>
+      )}
       <button
         type="button"
         disabled={busy}

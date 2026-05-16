@@ -38,6 +38,19 @@ export function getStoredAnalysisId(): string | null {
   }
 }
 
+export function setStoredAnalysisId(id: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (id) {
+      localStorage.setItem(ANALYSIS_ID_LOCAL_KEY, id);
+    } else {
+      localStorage.removeItem(ANALYSIS_ID_LOCAL_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Read handoff payload without removing (safe for React Strict Mode remounts). */
 export function peekAnalysisResultFromSession(): AnalysisPreviewPayload | null {
   if (typeof window === "undefined") return null;

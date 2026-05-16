@@ -14,7 +14,11 @@ async def load_questionnaire_document() -> QuestionnaireDocument:
     if settings.aws_s3_bucket and settings.aws_s3_questionnaire_key:
 
         def _read_s3() -> dict[str, Any]:
-            s3 = boto3.client("s3", region_name=settings.aws_region)
+            client_kwargs: dict[str, str] = {"region_name": settings.aws_region}
+            if settings.aws_access_key_id and settings.aws_secret_access_key:
+                client_kwargs["aws_access_key_id"] = settings.aws_access_key_id
+                client_kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+            s3 = boto3.client("s3", **client_kwargs)
             response = s3.get_object(
                 Bucket=settings.aws_s3_bucket, Key=settings.aws_s3_questionnaire_key
             )

@@ -1,9 +1,11 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
+from app.models.payment import Payment
 from app.schemas.analysis import (
     AnalysisAccessStatusResponse,
     AnalysisPreviewResponse,
@@ -13,11 +15,14 @@ from app.services.analysis import generate_analysis_from_answers, load_analysis_
 from app.services.analysis_store import (
     build_preview,
     create_analysis,
+    delete_stale_unclaimed_for_double_submit,
     get_analysis,
     get_latest_analysis_for_user,
 )
 from app.services.answers_validate import validate_answers
 from app.services.questionnaire_load import load_questionnaire_document
+from app.services.session import verify_session_token
+from app.services.user_store import get_user_by_id
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -33,6 +38,7 @@ async def get_analysis_mock() -> dict[str, Any]:
 
 @router.post("", response_model=AnalysisPreviewResponse)
 async def post_analysis(
+    request: Request,
     body: AnalysisRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AnalysisPreviewResponse:
@@ -50,6 +56,15 @@ async def post_analysis(
             detail=[{"loc": list(e.loc), "msg": e.msg} for e in errors],
         )
 
+    user_id = _current_user_id(request)
+
+    # Signed-in user who already has an analysis: return existing preview,
+    # no LLM call made.
+    if user_id:
+        existing = await get_latest_analysis_for_user(session, user_id)
+        if existing:
+            return AnalysisPreviewResponse.model_validate(build_preview(existing))
+
     try:
         full_payload = await generate_analysis_from_answers(answers)
     except Exception as exc:
@@ -60,10 +75,127 @@ async def post_analysis(
     analysis = await create_analysis(
         session,
         answers=dict(answers),
-        payload=full_payload,
-        user_id=None,
+        llm_result=full_payload,
+        user_id=user_id,
     )
     return AnalysisPreviewResponse.model_validate(build_preview(analysis))
+
+
+@router.get("/access-status", response_model=AnalysisAccessStatusResponse)
+async def get_analysis_access_status(
+    request: Request,
+    response: Response,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    local_analysis_id: Annotated[str | None, Query()] = None,
+) -> AnalysisAccessStatusResponse:
+    user_id = _current_user_id(request)
+    if not user_id:
+        return AnalysisAccessStatusResponse(signedIn=False)
+
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return AnalysisAccessStatusResponse(signedIn=False)
+
+    if await delete_stale_unclaimed_for_double_submit(
+        session, user_id, local_analysis_id
+    ):
+        response.headers["X-Removed-Stale-Questionnaire"] = "1"
+
+    # `delete_stale_unclaimed_for_double_submit` only deletes Analysis rows;
+    # `user` is still valid here (commit happened on the `analyses` table).
+    analysis = await get_latest_analysis_for_user(session, user_id)
+    has_answered = user.has_filled_questionnaire or (analysis is not None)
+
+    access_pay = await session.execute(
+        select(Payment).where(
+            Payment.user_id == user_id,
+            Payment.status == "succeeded",
+            Payment.metadata_["type"].as_string() == "analysis_access",
+        )
+    )
+    has_paid = access_pay.scalar_one_or_none() is not None
+
+    return AnalysisAccessStatusResponse(
+        signedIn=True,
+        hasAnsweredQuestionnaire=has_answered,
+        hasPaid=has_paid,
+        latestAnalysisId=analysis.id if analysis else None,
+    )
+
+
+@router.get("/me/preview", response_model=AnalysisPreviewResponse)
+async def get_my_preview(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AnalysisPreviewResponse:
+    """
+    Returns the preview slice for the signed-in user's latest claimed analysis.
+    Unlike `/{id}/full`, this is *not* gated on `paid`, because the preview
+    slice is the same data the unpaid frontend already saw at submit time.
+    """
+    user_id = _current_user_id(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    analysis = await get_latest_analysis_for_user(session, user_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="No analysis on file")
+    return AnalysisPreviewResponse.model_validate(build_preview(analysis))
+
+
+@router.get("/me/answers")
+async def get_my_answers(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, Any]:
+    """
+    Returns the raw questionnaire answers for the user's latest analysis,
+    paired with the questionnaire document so the client can render
+    Q -> A list without re-fetching the questionnaire.
+    """
+    user_id = _current_user_id(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    analysis = await get_latest_analysis_for_user(session, user_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="No analysis on file")
+    try:
+        doc = await load_questionnaire_document()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Failed to load questionnaire: {exc}"
+        ) from exc
+    answers = analysis.answers if isinstance(analysis.answers, dict) else {}
+    return {"questionnaire": doc.model_dump(mode="json"), "answers": answers}
+
+
+@router.get("/me/full")
+async def get_my_full_analysis(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, Any]:
+    """
+    Returns the full LLM payload for the signed-in user's latest analysis.
+    Requires a succeeded `analysis_access` payment — 403 if not paid.
+    """
+    user_id = _current_user_id(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+
+    access_pay = await session.execute(
+        select(Payment).where(
+            Payment.user_id == user_id,
+            Payment.status == "succeeded",
+            Payment.metadata_["type"].as_string() == "analysis_access",
+        )
+    )
+    if access_pay.scalar_one_or_none() is None:
+        raise HTTPException(status_code=403, detail="Payment required")
+
+    analysis = await get_latest_analysis_for_user(session, user_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="No analysis on file")
+
+    return analysis.llm_result
 
 
 @router.get("/{analysis_id}/full")
@@ -85,41 +217,12 @@ async def get_full_analysis(
     user_id = _current_user_id(request)
     if analysis.user_id is None or analysis.user_id != user_id:
         raise HTTPException(status_code=403, detail="Sign in to access this analysis")
-    if not analysis.paid:
-        raise HTTPException(status_code=402, detail="Payment required to unlock full roadmap")
 
-    return analysis.payload
-
-
-@router.get("/access-status", response_model=AnalysisAccessStatusResponse)
-async def get_analysis_access_status(
-    request: Request,
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> AnalysisAccessStatusResponse:
-    user_id = _current_user_id(request)
-    if not user_id:
-        return AnalysisAccessStatusResponse(signedIn=False)
-
-    analysis = await get_latest_analysis_for_user(session, user_id)
-    if analysis is None:
-        return AnalysisAccessStatusResponse(
-            signedIn=True,
-            hasAnsweredQuestionnaire=False,
-            hasPaid=False,
-            latestAnalysisId=None,
-        )
-
-    return AnalysisAccessStatusResponse(
-        signedIn=True,
-        hasAnsweredQuestionnaire=True,
-        hasPaid=analysis.paid,
-        latestAnalysisId=analysis.id,
-    )
+    return analysis.llm_result
 
 
 def _current_user_id(request: Request) -> str | None:
-    """Placeholder until cookie/JWT auth is wired up."""
-    user_id = request.headers.get("x-user-id")
-    if user_id:
-        return user_id
-    return request.cookies.get("dentnav_user_id")
+    token = request.cookies.get("dentnav_user_id")
+    if not token:
+        return None
+    return verify_session_token(token)

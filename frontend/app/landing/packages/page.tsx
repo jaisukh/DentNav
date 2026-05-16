@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { OneTimeAccessCTA } from "@/components/landing/OneTimeAccessCTA";
 
 // ─── Shared micro-icons ───────────────────────────────────────────────────────
 
@@ -128,23 +129,10 @@ function IconMap() {
   );
 }
 
-function IconAnalysis() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden>
-      <path
-        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 type ConsultPackage = {
+  serviceKey: string;
   category: string;
   title: string;
   duration: string;
@@ -163,6 +151,7 @@ type ConsultPackage = {
 
 const consultPackages: ConsultPackage[] = [
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_INTRO_CONSULTATION ?? "intro_consultation",
     category: "Foundation",
     title: "Introductory Consultation",
     duration: "45 min",
@@ -186,6 +175,7 @@ const consultPackages: ConsultPackage[] = [
     outcomeGrad: "bg-amber-50/60 ring-1 ring-amber-100",
   },
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_VISA_CONSULTATION ?? "visa_consultation",
     category: "Immigration",
     title: "Visa Guidance",
     duration: "60 min",
@@ -210,6 +200,7 @@ const consultPackages: ConsultPackage[] = [
     outcomeGrad: "bg-sky-50/60 ring-1 ring-sky-100",
   },
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_INTERVIEW_PREPARATION ?? "interview_preparation",
     category: "Career",
     title: "Interview Preparation",
     duration: "60 min",
@@ -234,6 +225,7 @@ const consultPackages: ConsultPackage[] = [
     outcomeGrad: "bg-violet-50/60 ring-1 ring-violet-100",
   },
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_CV_SOP_REVIEW ?? "cv_sop_review",
     category: "Application",
     title: "CV & SoP Preparation",
     duration: "60 min",
@@ -258,6 +250,7 @@ const consultPackages: ConsultPackage[] = [
     outcomeGrad: "bg-emerald-50/60 ring-1 ring-emerald-100",
   },
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_CAAPID_ASSISTANCE ?? "caapid_assistance",
     category: "Applications",
     title: "ADEA CAAPID & PASS Guidance",
     duration: "60 min",
@@ -282,6 +275,7 @@ const consultPackages: ConsultPackage[] = [
     outcomeGrad: "bg-rose-50/60 ring-1 ring-rose-100",
   },
   {
+    serviceKey: process.env.NEXT_PUBLIC_SERVICE_KEY_LICENSE_GUIDANCE ?? "license_guidance",
     category: "Licensing",
     title: "State License Guidance",
     duration: "60 min",
@@ -310,6 +304,7 @@ const consultPackages: ConsultPackage[] = [
 // ─── Consult card ─────────────────────────────────────────────────────────────
 
 function ConsultCard({
+  serviceKey,
   category,
   title,
   duration,
@@ -394,7 +389,7 @@ function ConsultCard({
           {/* CTA */}
           <div className="mt-4 space-y-2 border-t border-[#F8FAFC] pt-4">
             <Link
-              href="#"
+              href={`/landing/booking/${serviceKey}`}
               className="group/btn flex w-full items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white py-2.5 text-[13px] font-semibold text-dent-ink transition-all hover:border-dent-sky/35 hover:bg-dent-badge-bg/50"
             >
               Book a session
@@ -502,43 +497,8 @@ export default function LandingPackagesPage() {
               </ul>
             </div>
 
-            {/* Right: CTA panel */}
-            <div className="flex flex-col items-center justify-center text-center lg:pl-12">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-[#7DD3FC] ring-1 ring-white/15">
-                <IconAnalysis />
-              </div>
-
-              <p className="mt-5 font-display text-lg font-bold text-white">
-                Your analysis is ready
-              </p>
-              <p className="mt-2 text-sm leading-relaxed text-white/60">
-                Single purchase — permanent access to your personalised roadmap.
-              </p>
-
-              <div className="mt-8 flex w-full flex-col gap-3">
-                <Link
-                  href="/landing/packages#checkout"
-                  className="dentnav-cta-primary group relative flex w-full items-center justify-center gap-2.5 rounded-xl bg-dent-sky py-3.5 text-sm font-bold text-white"
-                >
-                  <span className="dentnav-cta-primary__halo" aria-hidden />
-                  <span className="dentnav-cta-primary__shine" aria-hidden />
-                  <span className="relative z-10 flex items-center gap-2.5">
-                    Get access
-                    <Arrow className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                  </span>
-                </Link>
-                <Link
-                  href="/questionnaire"
-                  className="flex w-full items-center justify-center rounded-xl border border-white/15 py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/30 hover:text-white"
-                >
-                  Review your questionnaire first
-                </Link>
-              </div>
-
-              <p className="mt-5 text-[11px] text-white/40">
-                Complete the questionnaire to generate your analysis
-              </p>
-            </div>
+            {/* Right: CTA panel — state-aware (filled / paid / not filled). */}
+            <OneTimeAccessCTA />
           </div>
         </div>
       </section>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/LoginForm";
 
 export function AuthPanel() {
@@ -15,7 +16,9 @@ export function AuthPanel() {
         </p>
       </div>
 
-      <LoginForm />
+      <Suspense>
+        <LoginForm />
+      </Suspense>
     </div>
   );
 }

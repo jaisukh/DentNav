@@ -168,29 +168,25 @@ class AnalysisPreviewResponse(BaseModel):
     Public preview returned from POST /api/v1/analysis.
 
     Intentionally narrow: only the readiness score breakdown + profile snapshot
-    fields needed for the locked preview UI. The full payload (pathway, risks,
+    fields needed for the locked preview UI. The full llm_result (pathway, risks,
     timeline, body) is stored server-side and only released through the gated
-    endpoint after sign-in + payment.
+    endpoint after sign-in.
     """
 
     analysisId: str
-    country: str = ""
-    degree: str = ""
-    yearsOfExp: str = ""
     performance: int = Field(ge=0, le=100, default=0)
     readinessScore: ReadinessScore = Field(
         default_factory=lambda: ReadinessScore(overall=0)
     )
     profileSnapshot: ProfileSnapshotPreview = Field(default_factory=ProfileSnapshotPreview)
-    paid: bool = False
 
 
 class AnalysisAccessStatusResponse(BaseModel):
     """
     Compact status for landing page gating.
 
-    - hasAnsweredQuestionnaire: whether we have at least one analysis row for the user.
-    - hasPaid: whether the latest claimed analysis is paid.
+    - hasAnsweredQuestionnaire: true when the user row has `has_filled_questionnaire`
+      and/or we have a claimed `analyses` row (legacy / drift).
     """
 
     signedIn: bool = False

@@ -25,12 +25,15 @@ class Settings(BaseSettings):
 
     backend_cors_origins: str = "http://localhost:3000,https://dentnav.vercel.app"
     cors_origin_regex: str | None = r"^https://[^/]+\.vercel\.app$"
+    secret_key: str = "change-me-to-a-random-secret"
     frontend_base_url: str = "http://localhost:3000"
     database_url: str = "postgresql://postgres:postgres@localhost:15432/dentnav"
 
     aws_region: str = "us-east-1"
     aws_s3_bucket: str = ""
     aws_s3_questionnaire_key: str = ""
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
 
     questionnaire_local_path: Path = REPO_ROOT / "data" / "questionnaire.v1.json"
 
@@ -40,6 +43,18 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1"
+
+    braintrust_api_key: str = ""
+
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
+
+    admin_api_key: str = ""
+
+    @property
+    def has_razorpay_config(self) -> bool:
+        return bool(self.razorpay_key_id and self.razorpay_key_secret)
 
     @field_validator("cors_origin_regex", mode="before")
     @classmethod

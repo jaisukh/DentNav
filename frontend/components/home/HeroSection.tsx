@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
-import Cubes from "./Cubes";
+import { QuestionnaireLink } from "@/components/questionnaire/QuestionnaireLink";
 import DotGrid from "./DotGrid";
 
 function ProblemCard({
@@ -220,8 +219,7 @@ export function HeroSection() {
               <div className="flex flex-col gap-[11px]">
                 <span className="relative inline-flex w-full rounded-full">
                   <span className="dentnav-cta-primary__halo rounded-full" aria-hidden />
-                  <Link
-                    href="/questionnaire"
+                  <QuestionnaireLink
                     className="dentnav-cta-primary group relative z-[1] inline-flex w-full items-center justify-center gap-2 rounded-full bg-[linear-gradient(98.5deg,#006591_0%,#0EA5E9_100%)] px-8 py-5 text-lg font-bold leading-7 text-white transition-all duration-300 hover:-translate-y-1 hover:brightness-110 active:scale-[0.98]"
                   >
                     <span className="dentnav-cta-primary__shine" aria-hidden />
@@ -232,7 +230,7 @@ export function HeroSection() {
                     >
                       →
                     </span>
-                  </Link>
+                  </QuestionnaireLink>
                 </span>
                 <p className="px-4 text-center text-[13px] font-normal leading-5 text-[#94A3B8] sm:px-12 md:px-20">
                   Answer a quick questionnaire to know where you stand
@@ -283,21 +281,40 @@ export function HeroSection() {
             </div>
           </div>
 
-          <div className="relative z-[2] flex left-[8%] h-full min-h-[min(520px,78vh)] w-full max-w-[min(100%,920px)] items-center justify-center self-stretch px-1 py-8 sm:px-2 lg:min-h-[min(640px,82vh)] lg:min-h-0 lg:-translate-y-6 lg:py-0">
-            <Cubes
-              className="cubes--hero"
-              gridCols={6}
-              gridRows={8}
-              faceRadius={3.5}
-              maxAngle={35}
-              radius={2.5}
-              borderStyle="1px solid rgba(14, 165, 233, 0.28)"
-              faceColor="#eff6ff"
-              rippleColor="#38bdf8"
-              rippleSpeed={1.5}
-              autoAnimate
-              rippleOnClick
-            />
+          <div className="relative z-[2] flex h-full min-h-[min(520px,78vh)] w-full items-center justify-center self-stretch px-1 py-8 sm:px-2 lg:min-h-0 lg:-translate-y-6 lg:py-0">
+            {/* Ambient glows behind the video */}
+            <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="h-[560px] w-[420px] rounded-full bg-dent-sky/15 blur-3xl" />
+            </div>
+            <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="h-[440px] w-[320px] rounded-full bg-[#6366f1]/10 blur-2xl" />
+            </div>
+
+            {/* Gradient-bordered video card */}
+            <div className="relative w-[280px] sm:w-[310px] lg:w-[330px]">
+              <div className="relative rounded-3xl bg-linear-to-br from-dent-sky via-[#818cf8] to-[#006591] p-[1.5px] shadow-[0_0_48px_-4px_rgba(14,165,233,0.45),0_32px_64px_-16px_rgba(0,0,0,0.25)]">
+                <div className="relative overflow-hidden rounded-[calc(1.5rem-1.5px)] bg-[#080f20]">
+                  <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/50 to-transparent" />
+                  <video
+                    src="/videos/IMG_3495.MOV"
+                    poster="/videos/IMG_3496.PNG"
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="block w-full"
+                    aria-label="DentNav product walkthrough"
+                  />
+                </div>
+              </div>
+
+              {/* Label below */}
+              <div className="mt-4 flex justify-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 shadow-sm">
+                  <span className="h-1.5 w-1.5 rounded-full bg-dent-sky" />
+                  Product walkthrough
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -306,7 +323,7 @@ export function HeroSection() {
           className="pointer-events-none absolute inset-x-0 bottom-0 top-0 z-[5] hidden lg:block"
           aria-hidden
         >
-          {/* 1 — top of the gap between left column and cube */}
+          {/* 1 — top-left, above the video */}
           <HeroFloatCard
             accent="sky"
             icon={
@@ -329,14 +346,12 @@ export function HeroSection() {
             }
             eyebrow="Application cycle"
             title="CAAPID & programs"
-            description={
-              "Strong applications and school enrollments.\nTimelines that match your goals."
-            }
+            description="Match programs to your goals."
             tags={["CAAPID", "SOPs", "LORs"]}
-            className="absolute left-[45%] top-[0%] max-w-[min(310px,30vw)]"
+            className="absolute left-[41%] top-[-1%] max-w-[min(220px,21vw)]"
           />
 
-          {/* 2 — top right; card centre ≈ cube's right edge */}
+          {/* 2 — top-right, above the video */}
           <HeroFloatCard
             accent="teal"
             align="right"
@@ -353,14 +368,12 @@ export function HeroSection() {
             }
             eyebrow="Visa & status"
             title="Immigration pathways"
-            description={
-              "Common visa paths for dentists.\nPlan status before you move."
-            }
-            tags={["EB1", "O1", "H1B", "F1", "J1"]}
-            className="absolute right-[2%] top-[-3%] max-w-[min(280px,25vw)]"
+            description="Know your visa options first."
+            tags={["EB1", "O1", "H1B", "J1"]}
+            className="absolute right-[1%] top-[-6%] max-w-[min(220px,21vw)]"
           />
 
-          {/* 3 — vertically centred in the column gap */}
+          {/* 3 — bottom-left, below the video */}
           <HeroFloatCard
             accent="violet"
             icon={
@@ -383,17 +396,16 @@ export function HeroSection() {
             }
             eyebrow="Education tracks"
             title="Advanced Standing DDS"
-            description={
-              "AS-DDS, GPR, and AEGD compared.\nPick what fits your timeline."
-            }
+            description="Compare AS-DDS, GPR, and AEGD."
             tags={["AS-DDS", "GPR", "AEGD"]}
-            className="absolute left-[51%] top-[52%] max-w-[min(310px,25vw)] -translate-y-1/2"
+            className="absolute bottom-[50%] left-[44%] max-w-[min(220px,21vw)]"
           />
 
-          {/* 4 — below the cube */}
+          {/* 4 — bottom-right, below the video */}
           <HeroFloatCard
             accent="amber"
-            align="center"
+            align="right"
+            iconAlign="right"
             icon={
               <svg viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path
@@ -407,11 +419,9 @@ export function HeroSection() {
             }
             eyebrow="Exams & licensure"
             title="INBDE → State License"
-            description={
-              "INBDE through bench tests to licensure.\nEach step in order."
-            }
+            description="Step-by-step path to state licensure."
             tags={["INBDE", "Bench tests", "State Boards"]}
-            className="absolute bottom-[-3%] left-[72%] max-w-[min(330px,35vw)]"
+            className="absolute bottom-[-2%] right-[5%] max-w-[min(350px,30vw)]"
           />
         </div>
       </div>

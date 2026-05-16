@@ -39,15 +39,11 @@ export type ProfileSnapshotPreview = {
 };
 
 export type AnalysisPreviewPayload = {
-  /** Server-side id used to claim/unlock the full payload after sign-in + pay. */
+  /** Server-side id used to claim/unlock the full llm_result after sign-in. */
   analysisId: string;
-  country: string;
-  degree: string;
-  yearsOfExp: string;
   /** Mirror of readinessScore.overall for legacy gauge consumers. */
   performance: number;
   readinessScore: ReadinessScore;
+  /** Contains country, degree, and clinicalExperience derived from the LLM result. */
   profileSnapshot: ProfileSnapshotPreview;
-  /** True once the server has marked this analysis as paid. */
-  paid: boolean;
 };

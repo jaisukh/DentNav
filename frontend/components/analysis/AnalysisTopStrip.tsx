@@ -5,7 +5,7 @@ type AnalysisTopStripProps = {
 };
 
 export function AnalysisTopStrip({ data }: AnalysisTopStripProps) {
-  const pills = [data.country, data.degree, data.yearsOfExp].filter(
+  const pills = [data.profileSnapshot.country, data.profileSnapshot.degree, data.profileSnapshot.clinicalExperience].filter(
     (label): label is string => Boolean(label && label.trim()),
   );
 

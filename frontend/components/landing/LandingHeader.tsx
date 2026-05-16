@@ -3,12 +3,22 @@
 import { signOut } from "@/lib/api/auth";
 import { BrandLogo } from "@/components/home/BrandLogo";
 import { useRouter } from "next/navigation";
+import { useAuthStatus } from "@/lib/auth-status-context";
 
 export function LandingHeader() {
   const router = useRouter();
+  const { clear } = useAuthStatus();
 
   async function handleSignOut() {
+    // Tell the backend to clear the session cookie, then immediately wipe
+    // the in-memory auth cache so the marketing page we're navigating to
+    // doesn't read a stale `signedIn: true` from the previous session.
+    // (The AuthStatusProvider lives in the root layout — it does not
+    // remount on client-side navigation, so without `clear()` the next
+    // render would still see the old session and pop the
+    // "You're already signed in" modal on every Sign-In button.)
     await signOut();
+    clear();
     router.push("/");
     router.refresh();
   }

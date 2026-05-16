@@ -1,4 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
+import { AnswersPreviewModal } from "@/components/ui/AnswersPreviewModal";
+import { SignInLink } from "@/components/auth/SignInLink";
+import { useAuthStatus } from "@/lib/auth-status-context";
 
 function TimelineRow() {
   return (
@@ -47,77 +53,114 @@ function RoadmapSkeleton() {
   );
 }
 
-export function BlurredRoadmapSection() {
+type BlurredRoadmapSectionProps = {
+  /** When true, the user is signed in inside the landing layout — show package/response CTAs. */
+  insideLanding?: boolean;
+};
+
+export function BlurredRoadmapSection({ insideLanding = false }: BlurredRoadmapSectionProps) {
+  const auth = useAuthStatus();
+  const [reviewOpen, setReviewOpen] = useState(false);
+
+  const showLandingCTAs = insideLanding && auth.signedIn;
+
   return (
-    <section className="relative isolate w-full overflow-hidden bg-white px-6 pb-10 pt-20 lg:px-[95px]">
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(70.71%_70.71%_at_50%_50%,#0EA5E9_2.95%,rgba(14,165,233,0)_2.95%),#FFFFFF] opacity-[0.05]"
-        aria-hidden
-      />
+    <>
+      <section className="relative isolate w-full overflow-hidden bg-white px-6 pb-10 pt-20 lg:px-[95px]">
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(70.71%_70.71%_at_50%_50%,#0EA5E9_2.95%,rgba(14,165,233,0)_2.95%),#FFFFFF] opacity-[0.05]"
+          aria-hidden
+        />
 
-      <div className="relative mx-auto min-h-[700px] w-full max-w-[1280px] py-4">
-        {/* Blurred skeleton content */}
-        <div className="opacity-30 blur-[7px]" aria-hidden>
-          <RoadmapSkeleton />
-        </div>
+        <div className="relative mx-auto min-h-[700px] w-full max-w-[1280px] py-4">
+          {/* Blurred skeleton content */}
+          <div className="opacity-30 blur-[7px]" aria-hidden>
+            <RoadmapSkeleton />
+          </div>
 
-        {/* Lock overlay — centered card on top of blur */}
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center bg-white/80 px-4 pt-6 backdrop-blur-[2px]">
-          <div className="pointer-events-auto w-full max-w-[512px] rounded-[32px] border border-sky-500/10 bg-white/[0.98] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] backdrop-blur-xl">
-            {/* Inner card content with absolute-like spacing matching Figma */}
-            <div className="flex flex-col items-center px-10 pb-10 pt-10">
-              {/* Lock icon circle */}
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-sky-500/20">
-                <svg width="24" height="32" viewBox="0 0 24 28" fill="none" aria-hidden>
-                  <path
-                    d="M18 10h-1V7c0-2.76-2.24-5-5-5S7 4.24 7 7v3H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V12c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3-9H9V7c0-1.66 1.34-3 3-3s3 1.34 3 3v3z"
-                    fill="#0EA5E9"
-                  />
-                </svg>
+          {/* Lock overlay — centered card on top of blur */}
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center bg-white/80 px-4 pt-6 backdrop-blur-[2px]">
+            <div className="pointer-events-auto w-full max-w-[512px] rounded-[32px] border border-sky-500/10 bg-white/[0.98] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] backdrop-blur-xl">
+              <div className="flex flex-col items-center px-10 pb-10 pt-10">
+                {/* Lock icon circle */}
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-sky-500/20">
+                  <svg width="24" height="32" viewBox="0 0 24 28" fill="none" aria-hidden>
+                    <path
+                      d="M18 10h-1V7c0-2.76-2.24-5-5-5S7 4.24 7 7v3H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V12c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3-9H9V7c0-1.66 1.34-3 3-3s3 1.34 3 3v3z"
+                      fill="#0EA5E9"
+                    />
+                  </svg>
+                </div>
+
+                {/* Heading */}
+                <h2 className="font-display mt-8 text-center text-[30px] font-extrabold leading-9 tracking-[-0.75px] text-slate-900">
+                  Unlock your full roadmap
+                </h2>
+
+                {/* Description */}
+                <p className="font-display mt-4 max-w-[420px] text-center text-base font-medium leading-[26px] text-slate-600">
+                  See program timelines, exam checkpoints, and a personalized checklist aligned to your profile—available
+                  when you continue with DentNav.
+                </p>
+
+                {showLandingCTAs ? (
+                  <>
+                    {/* Signed-in CTAs inside landing */}
+                    <Link
+                      href="/landing/packages"
+                      className="font-display mt-10 flex h-14 w-full items-center justify-center rounded-full bg-slate-900 text-base font-bold text-white transition-opacity hover:opacity-90"
+                    >
+                      Checkout packages
+                    </Link>
+
+                    <div className="mt-6 flex w-full items-center gap-4">
+                      <div className="h-px flex-1 bg-slate-200" />
+                      <span className="font-display text-xs font-bold uppercase tracking-[1.2px] text-slate-400">or</span>
+                      <div className="h-px flex-1 bg-slate-200" />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setReviewOpen(true)}
+                      className="font-display mt-6 flex h-[60px] w-full items-center justify-center rounded-full border-2 border-slate-200 text-base font-bold text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                    >
+                      Preview your response
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {/* Anonymous CTAs */}
+                    <SignInLink
+                      className="font-display mt-10 flex h-14 w-full items-center justify-center rounded-full bg-slate-900 text-base font-bold text-white transition-opacity hover:opacity-90"
+                    >
+                      Continue with Google
+                    </SignInLink>
+
+                    <div className="mt-6 flex w-full items-center gap-4">
+                      <div className="h-px flex-1 bg-slate-200" />
+                      <span className="font-display text-xs font-bold uppercase tracking-[1.2px] text-slate-400">or</span>
+                      <div className="h-px flex-1 bg-slate-200" />
+                    </div>
+
+                    <SignInLink
+                      className="font-display mt-6 flex h-[60px] w-full items-center justify-center rounded-full border-2 border-slate-200 text-base font-bold text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                    >
+                      Sign in
+                    </SignInLink>
+                  </>
+                )}
+
+                {/* Disclaimer */}
+                <p className="font-display mt-8 text-center text-xs leading-4 text-slate-400">
+                  Full roadmap access is part of DentNav onboarding. Availability may vary by region.
+                </p>
               </div>
-
-              {/* Heading */}
-              <h2 className="font-display mt-8 text-center text-[30px] font-extrabold leading-9 tracking-[-0.75px] text-slate-900">
-                Unlock your full roadmap
-              </h2>
-
-              {/* Description */}
-              <p className="font-display mt-4 max-w-[420px] text-center text-base font-medium leading-[26px] text-slate-600">
-                See program timelines, exam checkpoints, and a personalized checklist aligned to your profile—available
-                when you continue with DentNav.
-              </p>
-
-              {/* Primary CTA */}
-              <Link
-                href="/auth/login"
-                className="font-display mt-10 flex h-14 w-full items-center justify-center rounded-full bg-slate-900 text-base font-bold text-white transition-opacity hover:opacity-90"
-              >
-                Continue with Google
-              </Link>
-
-              {/* Divider with "OR" */}
-              <div className="mt-6 flex w-full items-center gap-4">
-                <div className="h-px flex-1 bg-slate-200" />
-                <span className="font-display text-xs font-bold uppercase tracking-[1.2px] text-slate-400">or</span>
-                <div className="h-px flex-1 bg-slate-200" />
-              </div>
-
-              {/* Secondary CTA */}
-              <Link
-                href="/auth/login"
-                className="font-display mt-6 flex h-[60px] w-full items-center justify-center rounded-full border-2 border-slate-200 text-base font-bold text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
-              >
-                Sign in
-              </Link>
-
-              {/* Disclaimer */}
-              <p className="font-display mt-8 text-center text-xs leading-4 text-slate-400">
-                Full roadmap access is part of DentNav onboarding. Availability may vary by region.
-              </p>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <AnswersPreviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} />
+    </>
   );
 }
