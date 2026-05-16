@@ -40,6 +40,16 @@ export type VerifyPaymentResponse = {
   calendly_invitee_uri: string | null;
 };
 
+export type MyBooking = {
+  id: string;
+  status: string;
+  slot_time: string | null;
+  doctor_name: string;
+  service_name: string;
+  duration_minutes: number | null;
+  calendly_invitee_uri: string | null;
+};
+
 export async function fetchDoctorsForService(serviceKey: string): Promise<DoctorForService[]> {
   const res = await fetch(API_ROUTES.serviceDoctors(serviceKey), {
     credentials: "include",
@@ -111,6 +121,15 @@ export async function cancelOrder(bookingId: string): Promise<void> {
     credentials: "include",
     body: JSON.stringify({ booking_id: bookingId }),
   });
+}
+
+export async function fetchMyBookings(): Promise<MyBooking[]> {
+  const res = await fetch(API_ROUTES.myBookings, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Failed to load bookings: ${res.status}`);
+  return res.json() as Promise<MyBooking[]>;
 }
 
 export async function verifyPayment(

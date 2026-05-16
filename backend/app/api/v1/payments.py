@@ -10,11 +10,12 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db.session import get_session
+from app.db.session import async_session_factory, get_session
 from app.models.booking import Booking
 from app.models.doctor_service import DoctorService
 from app.models.payment import Payment
 from app.models.slot_reservation import SlotReservation
+from app.models.user import User
 from app.schemas.payment import (
     CancelOrderRequest,
     CreateOrderRequest,
@@ -23,6 +24,7 @@ from app.schemas.payment import (
     VerifyPaymentResponse,
 )
 from app.services import razorpay_client
+from app.services.calendly import create_scheduled_event
 from app.services.session import verify_session_token
 from app.services.ws_manager import ws_manager
 
@@ -270,13 +272,53 @@ async def verify_payment(
 
 
 async def _create_calendly_event(booking_id: str) -> None:
-    """Background task — Calendly event creation after payment confirmed."""
-    # TODO: implement in Calendly integration subtask
-    # 1. Load booking + doctor_service + doctor.calendly_pat
-    # 2. Re-verify slot still available in Calendly
-    # 3. POST /scheduled_events with doctor's PAT
-    # 4. UPDATE bookings SET scheduled_at, calendly_event_uri, calendly_invitee_uri
-    pass
+    """Background task — create a Calendly scheduled event after payment is confirmed."""
+    async with async_session_factory() as session:
+        booking = await session.get(Booking, booking_id)
+        if not booking or booking.status != "confirmed" or not booking.slot_time:
+            return
+
+        ds = await session.get(DoctorService, booking.doctor_service_id)
+        if not ds:
+            return
+
+        user = await session.get(User, booking.user_id)
+        if not user:
+            return
+
+        doctor = ds.doctor
+        service = ds.service
+
+        if not doctor or not doctor.calendly_pat:
+            _log.warning("Skipping Calendly event for booking %s — doctor has no PAT", booking_id)
+            return
+
+        duration_minutes = service.duration_minutes if service else 60
+        start_time = booking.slot_time
+        end_time = start_time + timedelta(minutes=duration_minutes or 60)
+        full_name = f"{user.first_name} {user.last_name}".strip() or user.email
+
+        try:
+            event_uri, cancel_url = await create_scheduled_event(
+                event_type_uri=ds.calendly_event_type_uri,
+                pat=doctor.calendly_pat,
+                start_time=start_time,
+                end_time=end_time,
+                invitee_name=full_name,
+                invitee_email=user.email,
+            )
+        except Exception as exc:
+            _log.error(
+                "Calendly event creation failed for booking %s: %s",
+                booking_id, exc, exc_info=True,
+            )
+            return
+
+        booking.calendly_event_uri = event_uri
+        booking.calendly_invitee_uri = cancel_url
+        booking.scheduled_at = start_time
+        await session.commit()
+        _log.info("Calendly event created for booking %s: %s", booking_id, event_uri)
 
 
 @router.post("/webhook/razorpay", status_code=200)

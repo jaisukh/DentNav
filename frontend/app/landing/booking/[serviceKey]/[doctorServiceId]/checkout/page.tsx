@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { cancelOrder, createOrder, releaseSlot, verifyPayment } from "@/lib/api/booking";
+import { createOrder, releaseSlot, verifyPayment } from "@/lib/api/booking";
 
 // ─── Razorpay types ───────────────────────────────────────────────────────────
 
@@ -102,7 +102,6 @@ export default function CheckoutPage() {
 
   const [phase, setPhase] = useState<Phase>("ready");
   const [order, setOrder] = useState<{ orderId: string; amount: number; currency: string; bookingId: string } | null>(null);
-  const [confirmation, setConfirmation] = useState<{ bookingId: string; slotTime: string; doctorName: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const paying = useRef(false);
@@ -110,7 +109,7 @@ export default function CheckoutPage() {
 
   // ── Expire when reservation countdown hits zero (only before order is created) ──
   // Once createOrder succeeds, the pending_payment booking holds the slot for
-  // 15 min — the reservation countdown is no longer the gate.
+  // 10 min — the reservation countdown is no longer the gate.
 
   useEffect(() => {
     if (secondsLeft === 0 && phase === "ready" && !order) {
@@ -176,17 +175,13 @@ export default function CheckoutPage() {
       handler: async (response) => {
         setPhase("verifying");
         try {
-          const result = await verifyPayment(
+          await verifyPayment(
             response.razorpay_order_id,
             response.razorpay_payment_id,
             response.razorpay_signature,
           );
-          setConfirmation({
-            bookingId: result.booking_id,
-            slotTime: result.slot_time,
-            doctorName: result.doctor_name,
-          });
           setPhase("success");
+          router.replace("/landing?booking_confirmed=1");
         } catch (err: unknown) {
           if (err instanceof Error && err.message === "slot_expired") {
             setPhase("expired");
@@ -199,11 +194,8 @@ export default function CheckoutPage() {
       modal: {
         ondismiss: () => {
           paying.current = false;
-          if (activeOrder?.bookingId) {
-            cancelOrder(activeOrder.bookingId).catch(() => {});
-          } else if (reservationId) {
-            releaseSlot(reservationId).catch(() => {});
-          }
+          // Don't cancel the booking — payment may still succeed via Razorpay webhook.
+          // The slot_expires_at (10 min) will free the slot automatically if no payment arrives.
           router.push(`/landing/booking/${serviceKey}`);
         },
       },
@@ -239,38 +231,11 @@ export default function CheckoutPage() {
         </button>
       )}
 
-      {/* ── Success ── */}
-      {phase === "success" && confirmation && (
-        <div className="flex flex-col items-center gap-6 py-8 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 ring-1 ring-emerald-100">
-            <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7 text-emerald-500" aria-hidden>
-              <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="font-display text-2xl font-bold text-dent-ink">Booking confirmed</h1>
-            <p className="mt-2 text-[14px] text-[#64748B]">
-              You&apos;re booked with {confirmation.doctorName}
-            </p>
-          </div>
-          <div className="w-full rounded-2xl border border-[#E2E8F0] bg-white px-6 py-5 text-left shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#94A3B8]">Your appointment</p>
-            <p className="mt-2 font-display text-base font-bold text-dent-ink">{confirmation.doctorName}</p>
-            {(() => { const s = formatSlotTime(confirmation.slotTime); return (
-              <>
-                <p className="mt-1 text-[13px] text-[#64748B]">{s.date}</p>
-                <p className="text-[13px] font-semibold text-dent-deep">{s.time}</p>
-              </>
-            ); })()}
-            <p className="mt-3 text-[11px] text-[#94A3B8]">Booking ID: {confirmation.bookingId}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => router.push("/landing")}
-            className="w-full rounded-xl bg-dent-ink py-3 text-[13px] font-semibold text-white transition-colors hover:bg-dent-deep"
-          >
-            Back to home
-          </button>
+      {/* ── Success: redirect fires immediately; show brief spinner while navigating ── */}
+      {phase === "success" && (
+        <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-[#94A3B8]">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#E2E8F0] border-t-dent-sky" />
+          Booking confirmed — redirecting…
         </div>
       )}
 

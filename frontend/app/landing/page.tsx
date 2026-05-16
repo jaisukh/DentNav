@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BrochureDownload } from "@/components/landing/BrochureDownload";
 import { LandingVideoSection } from "@/components/landing/LandingVideoSection";
@@ -21,6 +22,8 @@ export default function LandingPage() {
   const router = useRouter();
   const [reclaimedToast, setReclaimedToast] = useState(false);
   const dismissReclaimed = useCallback(() => setReclaimedToast(false), []);
+  const [bookingBar, setBookingBar] = useState(false);
+  const dismissBookingBar = useCallback(() => setBookingBar(false), []);
 
   // OAuth callback can append ?reclaimed_existing=1 — strip it from the URL
   // and show a one-time toast. setState is deferred (microtask) so eslint's
@@ -31,9 +34,16 @@ export default function LandingPage() {
     next.delete("reclaimed_existing");
     const q = next.toString();
     router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
-    queueMicrotask(() => {
-      setReclaimedToast(true);
-    });
+    queueMicrotask(() => setReclaimedToast(true));
+  }, [searchParams, pathname, router]);
+
+  useEffect(() => {
+    if (searchParams.get("booking_confirmed") !== "1") return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("booking_confirmed");
+    const q = next.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+    queueMicrotask(() => setBookingBar(true));
   }, [searchParams, pathname, router]);
 
   return (
@@ -46,6 +56,41 @@ export default function LandingPage() {
         tone="sky"
       />
 
+
+      {/* ── Booking confirmed bar ────────────────────────────────────── */}
+      {bookingBar && (
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500">
+              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 text-white" aria-hidden>
+                <path d="M3 8.5l3.5 3.5L13 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-emerald-900">Session booked!</p>
+              <p className="text-[12px] text-emerald-700">Your slot is confirmed. You have an upcoming session.</p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <Link
+              href="/landing/my-bookings"
+              className="text-[12px] font-bold text-emerald-800 underline underline-offset-2 hover:text-emerald-900"
+            >
+              My Bookings →
+            </Link>
+            <button
+              type="button"
+              onClick={dismissBookingBar}
+              aria-label="Dismiss"
+              className="text-emerald-600 hover:text-emerald-800"
+            >
+              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" aria-hidden>
+                <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <header className="mb-6">

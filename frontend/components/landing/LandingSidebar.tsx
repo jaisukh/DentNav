@@ -50,6 +50,21 @@ const navItems = [
     ),
   },
   {
+    label: "My Bookings",
+    href: "/landing/my-bookings",
+    inactiveClass:
+      "text-dent-ink hover:bg-dent-badge-bg/60 hover:text-dent-ink",
+    activeClass:
+      "bg-dent-ink text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0" aria-hidden>
+        <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
     label: "About",
     href: "/landing/about",
     inactiveClass:

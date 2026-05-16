@@ -11,7 +11,7 @@ from app.db.session import get_session
 from app.models.booking import Booking
 from app.models.doctor_service import DoctorService
 from app.models.slot_reservation import SlotReservation
-from app.schemas.booking import ReleaseRequest, ReserveRequest, ReserveResponse
+from app.schemas.booking import MyBookingResponse, ReleaseRequest, ReserveRequest, ReserveResponse
 from app.services.session import verify_session_token
 from app.services.ws_manager import ws_manager
 
@@ -26,6 +26,38 @@ def _require_user(request: Request) -> str:
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
     return user_id
+
+
+@router.get("/my", response_model=list[MyBookingResponse])
+async def my_bookings(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[MyBookingResponse]:
+    user_id = _require_user(request)
+
+    result = await session.execute(
+        select(Booking, DoctorService)
+        .join(DoctorService, Booking.doctor_service_id == DoctorService.id)
+        .where(
+            Booking.user_id == user_id,
+            Booking.status.in_(["confirmed", "completed", "no_show"]),
+        )
+        .order_by(Booking.created_at.desc())
+    )
+    rows = result.all()
+
+    return [
+        MyBookingResponse(
+            id=booking.id,
+            status=booking.status,
+            slot_time=booking.slot_time,
+            doctor_name=ds.doctor.name if ds.doctor else "",
+            service_name=ds.service.name if ds.service else "",
+            duration_minutes=ds.service.duration_minutes if ds.service else None,
+            calendly_invitee_uri=booking.calendly_invitee_uri,
+        )
+        for booking, ds in rows
+    ]
 
 
 @router.post("/reserve", response_model=ReserveResponse)

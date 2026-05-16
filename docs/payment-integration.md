@@ -55,7 +55,7 @@ Business product catalogue. Independent of any doctor or Calendly account.
 | `description` | TEXT NOT NULL DEFAULT `''` | |
 | `duration_minutes` | INTEGER | NULL → analysis (no calendar). NOT NULL → consultation. |
 | `base_amount` | INTEGER NOT NULL | Price in minor unit (cents). 0 = TBD. |
-| `currency` | VARCHAR(10) NOT NULL DEFAULT `'usd'` | |
+| `currency` | VARCHAR(10) NOT NULL DEFAULT `'inr'` | |
 | `is_active` | BOOLEAN NOT NULL DEFAULT `true` | Soft-disable without breaking FK history |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 | `updated_at` | TIMESTAMPTZ NOT NULL | |
@@ -185,7 +185,7 @@ needed on the critical path. A periodic `DELETE WHERE expires_at <= now()` handl
 | `payment_id` | VARCHAR(36) FK → payments | NULL until payment succeeds |
 | `status` | VARCHAR(50) NOT NULL DEFAULT `'pending_payment'` | See transitions below |
 | `slot_time` | TIMESTAMPTZ | Chosen slot (UTC) |
-| `slot_expires_at` | TIMESTAMPTZ | 15-minute payment hold TTL |
+| `slot_expires_at` | TIMESTAMPTZ | 10-minute payment hold TTL |
 | `scheduled_at` | TIMESTAMPTZ | Set by Calendly after event confirmed |
 | `calendly_event_uri` | TEXT | Full event URI — used for cancellations |
 | `calendly_invitee_uri` | TEXT | Invitee URI — user's reschedule/cancel link |
@@ -222,7 +222,7 @@ confirmed       ──► no_show     user missed session
 | `razorpay_payment_id` | VARCHAR(255) UNIQUE | Set after verification |
 | `razorpay_signature` | VARCHAR(512) | HMAC-SHA256 — stored for audit |
 | `amount` | INTEGER NOT NULL | Snapshot at order creation — never a float |
-| `currency` | VARCHAR(10) NOT NULL DEFAULT `'usd'` | Snapshot from service |
+| `currency` | VARCHAR(10) NOT NULL DEFAULT `'inr'` | Snapshot from service |
 | `status` | VARCHAR(50) NOT NULL DEFAULT `'pending'` | See transitions below |
 | `metadata` | JSONB NOT NULL DEFAULT `'{}'` | Error codes, refund reason, etc. |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
@@ -268,7 +268,7 @@ services (S1: "Visa Consultation", 60 min)
 doctors  (D1: Dr. Priya)
   └── doctor_services (DS1: D1 + S1, event_type_uri=..., price_override=NULL)
         └── slot_reservations (SR1: DS1, slot=10:00, user=U1, expires=+5min)
-        └── bookings (B1: DS1, user=U1, status=pending_payment, slot_expires_at=+15min)
+        └── bookings (B1: DS1, user=U1, status=pending_payment, slot_expires_at=+10min)
               └── payments (P1: user=U1, ds=DS1, ref=B1, status=pending)
                     └── razorpay_order_id = order_ABC
                           └── razorpay_payment_id = pay_XYZ
@@ -372,7 +372,7 @@ Frontend: starts 5-minute countdown
 
 ---
 
-### 3.4 Order Creation (promote to 15-minute hard lock)
+### 3.4 Order Creation (promote to 10-minute hard lock)
 
 ```
 User clicks "Proceed to Payment"
@@ -387,7 +387,7 @@ Backend:
   4. INSERT bookings (
        status         = 'pending_payment',
        slot_time      = '2026-06-01T10:00:00Z',
-       slot_expires_at = now() + 15 min
+       slot_expires_at = now() + 10 min
      )
   5. INSERT payments (status='pending', amount, currency snapshot)
   6. POST razorpay.com/v1/orders {
@@ -402,8 +402,28 @@ Backend:
     expires_at: "...", razorpay_key: "rzp_live_..." }
 
 Frontend:
-  Replaces 5-min timer with 15-min timer
+  Replaces 5-min timer with 10-min timer
   Opens Razorpay checkout modal
+```
+
+---
+
+### 3.4.1 Modal Dismiss — Redirect Only
+
+When the user opens the Razorpay modal but exits without paying, the frontend fires
+`ondismiss` and **only redirects** to the doctor selection page — no API call is made.
+
+```
+ondismiss fires:
+  paying.current = false
+  router.push(`/landing/booking/${serviceKey}`)   ← redirect, no cancel-order call
+
+Why no API call:
+  - Payment may still be processing; the Razorpay webhook can arrive and confirm the
+    booking even after the modal closes.
+  - The booking row has slot_expires_at = now()+10min. If no payment arrives, the slot
+    becomes available again automatically when that deadline passes.
+  - Calling cancel-order prematurely would race with a legitimate webhook confirmation.
 ```
 
 ---
@@ -414,8 +434,8 @@ Frontend:
 const rzp = new Razorpay({
   key:         "rzp_live_...",
   order_id:    "order_ABC",
-  amount:      5000,
-  currency:    "inr",
+  amount:      50000,           // paise — Razorpay always uses minor units
+  currency:    "INR",           // must be uppercase; Razorpay rejects lowercase
   name:        "DentNav",
   description: "Visa Consultation — 60 min with Dr. Priya",
   prefill:     { name: "...", email: "..." },
@@ -425,7 +445,10 @@ const rzp = new Razorpay({
   },
   modal: {
     ondismiss: function() {
-      // User closed modal — 15-min timer still running, slot still held
+      // Just redirect — do NOT cancel the booking.
+      // Payment may still arrive via Razorpay webhook and confirm the booking.
+      // slot_expires_at (10 min) frees the slot automatically if no payment arrives.
+      router.push(`/landing/booking/${serviceKey}`)
     }
   }
 })

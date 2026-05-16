@@ -11,13 +11,13 @@
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 16.2.1 (App Router, Turbopack) |
+| Frontend | Next.js 16.2.1 (App Router, Webpack) |
 | Route guard | `middleware.ts` (Next.js Edge) + `AuthGuard` client component |
 | Backend | FastAPI (Python 3.12, async) |
 | Database | PostgreSQL 16 · SQLAlchemy 2 async · Alembic |
 | Auth | Google OAuth 2.0 (backend-side redirect, signed JWT in httpOnly cookie, CSRF nonce on `state`) |
 | CORS | `expose_headers` includes `X-Removed-Stale-Questionnaire` (read by the Next app) |
-| Payments | Razorpay (JS popup, HMAC verification) — _integration pending_ |
+| Payments | Razorpay (JS popup, HMAC verification, webhooks) |
 | AI | OpenAI (GPT-4o) |
 | Storage | AWS S3 (questionnaire JSON) with local-file fallback |
 
@@ -138,85 +138,87 @@ navigation between `/landing`, `/landing/packages`, and `/landing/about`.
 > can be claimed later via the OAuth callback `state` param. See §7 for
 > edge cases when `localStorage` and multiple rows diverge.
 
-### `services` _(new — migration 0004)_
+### `services` _(migrations 0005, 0011)_
 
-Single source of truth for every purchasable product. Seeded once; prices and
-Calendly event UUIDs updated in-place — no redeploy needed.
+Single source of truth for every purchasable product. Seeded once; prices
+updated in-place — no redeploy needed.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | VARCHAR(36) PK | UUID v4 |
-| `slug` | VARCHAR(100) UNIQUE NOT NULL | `analysis_access`, `consultation_visa`, … |
+| `service_key` | VARCHAR(100) UNIQUE NOT NULL | Machine-readable lookup key: `visa_consultation`, `analysis_access`, … |
 | `name` | VARCHAR(255) NOT NULL | Display name shown in the UI |
 | `description` | TEXT NOT NULL DEFAULT `''` | |
-| `category` | VARCHAR(50) NOT NULL | `analysis` \| `consultation` |
-| `duration_minutes` | INTEGER | NULL for `analysis` category |
-| `amount` | INTEGER NOT NULL | Price in the currency's minor unit (e.g. cents for USD) — never a float |
-| `currency` | VARCHAR(10) NOT NULL DEFAULT `'usd'` | |
-| `calendly_event_type_uuid` | VARCHAR(255) | NULL for `analysis` category |
+| `duration_minutes` | INTEGER | NULL → analysis (no calendar); NOT NULL → consultation |
+| `base_amount` | INTEGER NOT NULL | Price in paise (Razorpay minor unit for INR); 50000 = ₹500; 0 = TBD |
+| `currency` | VARCHAR(10) NOT NULL DEFAULT `'inr'` | |
 | `is_active` | BOOLEAN NOT NULL DEFAULT `true` | Soft-disable without deleting |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 | `updated_at` | TIMESTAMPTZ NOT NULL | |
 
-### `payments` _(new — migration 0005)_
+> Category is derived: `duration_minutes IS NULL` → analysis; `IS NOT NULL` → consultation.
+> No `category` column. Calendly event UUIDs live in `doctor_services` (per doctor).
+
+### `payments` _(migration 0010)_
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | VARCHAR(36) PK | UUID v4 |
 | `user_id` | VARCHAR(36) FK → users NOT NULL | Must be signed in to pay |
-| `service_id` | VARCHAR(36) FK → services NOT NULL | Which service was purchased |
-| `reference_id` | VARCHAR(36) | `analyses.id` for `analysis` · `bookings.id` for consultations |
+| `doctor_service_id` | VARCHAR(36) FK → doctor_services | NULL for analysis_access (no doctor) |
+| `reference_id` | VARCHAR(36) | `analyses.id` for analysis · `bookings.id` for consultations |
 | `razorpay_order_id` | VARCHAR(255) UNIQUE NOT NULL | `order_ABC` — set at order creation |
 | `razorpay_payment_id` | VARCHAR(255) UNIQUE | `pay_XYZ` — set after verification |
 | `razorpay_signature` | VARCHAR(512) | HMAC-SHA256 signature — audit trail |
-| `amount` | INTEGER NOT NULL | Snapshot of price at time of payment |
-| `currency` | VARCHAR(10) NOT NULL DEFAULT `'usd'` | Snapshot from `services.currency` |
-| `status` | VARCHAR(50) NOT NULL DEFAULT `'pending'` | `pending \| succeeded \| failed \| expired \| refunded` |
-| `metadata` | JSONB NOT NULL DEFAULT `'{}'` | Error codes, refund reason, etc. |
+| `amount` | INTEGER NOT NULL | Snapshot in paise at order creation |
+| `currency` | VARCHAR(10) NOT NULL DEFAULT `'inr'` | Snapshot from `services.currency` |
+| `status` | VARCHAR(50) NOT NULL DEFAULT `'pending'` | `pending \| succeeded \| failed \| expired \| refund_pending \| refunded` |
+| `metadata_` | JSONB NOT NULL DEFAULT `'{}'` | Error codes, refund reason, etc. |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 | `updated_at` | TIMESTAMPTZ NOT NULL | |
 
 ```sql
+-- Prevents double-charging for the same analysis unlock
 CREATE UNIQUE INDEX uq_payments_analysis_succeeded
   ON payments (reference_id)
-  WHERE service_id = (SELECT id FROM services WHERE slug = 'analysis_access')
-    AND status = 'succeeded';
+  WHERE doctor_service_id IS NULL AND status = 'succeeded';
 ```
 
-### `bookings` _(new — migration 0006, consultation services only)_
+### `bookings` _(migration 0009, consultation services only)_
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | VARCHAR(36) PK | UUID v4 |
 | `user_id` | VARCHAR(36) FK → users NOT NULL | |
-| `service_id` | VARCHAR(36) FK → services NOT NULL | Determines duration + Calendly event type |
+| `doctor_service_id` | VARCHAR(36) FK → doctor_services NOT NULL | Captures doctor + service in one FK |
 | `payment_id` | VARCHAR(36) FK → payments | NULL until payment succeeds |
 | `status` | VARCHAR(50) NOT NULL DEFAULT `'pending_payment'` | `pending_payment \| confirmed \| completed \| cancelled \| no_show` |
-| `slot_time` | TIMESTAMPTZ | Slot chosen by user (soft-locked in Redis before payment) |
-| `slot_expires_at` | TIMESTAMPTZ | `slot_time + 15 min` — hard DB deadline |
+| `slot_time` | TIMESTAMPTZ | Chosen slot (UTC) |
+| `slot_expires_at` | TIMESTAMPTZ | `now() + 10 min` at order creation — hard DB deadline |
 | `scheduled_at` | TIMESTAMPTZ | Set by Calendly after event confirmed |
-| `calendly_event_id` | VARCHAR(255) | Calendly event UUID |
-| `calendly_invitee_url` | TEXT | Calendly invitee link for cancellations |
+| `calendly_event_uri` | TEXT | Full Calendly event URI — used for cancellations |
+| `calendly_invitee_uri` | TEXT | Invitee reschedule/cancel link |
 | `notes` | TEXT | Internal prep notes |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 | `updated_at` | TIMESTAMPTZ NOT NULL | |
 
-> `duration_minutes` and `calendly_event_type_uuid` are read from `services`
-> at booking time — not stored on `bookings` directly.
+> Slot is soft-locked via `slot_reservations` (PostgreSQL, no Redis) for 5 min before payment.
+> On `POST /payments/create-order` the reservation is deleted and a `booking` row becomes the lock.
 
 ### Product catalogue
 
-| `services.slug` | `category` | `duration_minutes` | `reference_id` table |
+| `services.service_key` | `duration_minutes` | `base_amount` | `reference_id` table |
 |---|---|---|---|
-| `analysis_access` | `analysis` | — | `analyses` |
-| `consultation_introductory` | `consultation` | 45 | `bookings` |
-| `consultation_visa` | `consultation` | 60 | `bookings` |
-| `consultation_interview` | `consultation` | 60 | `bookings` |
-| `consultation_cv_sop` | `consultation` | 60 | `bookings` |
-| `consultation_caapid` | `consultation` | 60 | `bookings` |
-| `consultation_license` | `consultation` | 60 | `bookings` |
+| `analysis_access` | NULL (no calendar) | 0 (TBD) | `analyses` |
+| `intro_consultation` | 45 | 50000 (₹500) | `bookings` |
+| `visa_consultation` | 60 | 50000 (₹500) | `bookings` |
+| `interview_preparation` | 60 | 50000 (₹500) | `bookings` |
+| `cv_sop_review` | 60 | 50000 (₹500) | `bookings` |
+| `caapid_assistance` | 60 | 50000 (₹500) | `bookings` |
+| `license_guidance` | 60 | 50000 (₹500) | `bookings` |
 
-> Prices and Calendly event UUIDs are stored as rows in `services`, not as env vars.
+> Prices (in paise) and Calendly event UUIDs (per doctor, in `doctor_services`) are stored in
+> the DB — not env vars. Amounts are in Razorpay minor units: 50000 paise = ₹500.
 
 ---
 
@@ -448,29 +450,39 @@ DB writes:
 
 ### 5.6 Payment — consultation booking
 
-> Full flow with slot locking, Redis soft-lock, failure cases, and Calendly
-> event creation is documented in `docs/payment-integration.md`.
+> Full flow with slot locking, failure cases, and Calendly event creation is
+> documented in `docs/payment-integration.md` and `docs/multi-doctor-booking-system.md`.
 
 ```
-User selects service → calendar shows available slots (Calendly proxy)
-User selects slot   → Redis soft-lock broadcast via WebSocket to all clients
+User selects service → calendar shows available slots (Calendly proxy via doctor's PAT)
+User selects slot   → PostgreSQL slot_reservations soft-lock (5 min), WS broadcast
 
 User clicks "Pay Now":
   POST /api/v1/payments/create-order
-    Body: { booking_id: "B1" }
+    Body: { doctor_service_id: "DS1", slot_time: "2026-06-01T10:00:00Z" }
   FastAPI:
-    INSERT bookings (user_id, service_id, status='pending_payment',
-                     slot_time, slot_expires_at=now()+15min)
-    INSERT payments (user_id, service_id, reference_id=B1, status='pending',
-                     amount, currency)
-    POST Razorpay /v1/orders with close_by=slot_expires_at
+    Verify slot_reservation exists for this user (not expired) → 409 if missing
+    INSERT bookings (doctor_service_id, status='pending_payment',
+                     slot_time, slot_expires_at=now()+10min)
+    INSERT payments (doctor_service_id, reference_id=B1, status='pending',
+                     amount=50000, currency='inr')
+    POST Razorpay /v1/orders { amount, currency="INR", close_by=slot_expires_at }
+    DELETE slot_reservations (booking is now the lock)
+  ← { order_id, amount, currency, booking_id, expires_at }
 
-Razorpay popup → user pays → frontend sends signature to backend
+  Frontend: opens Razorpay modal with 10-min countdown
+
+  User exits modal without paying (ondismiss):
+    Frontend: redirect to /landing/booking/{serviceKey} — no API call
+    Slot stays held; slot_expires_at frees it after 10 min automatically
+    Payment may still confirm via Razorpay webhook if processing was in-flight
+
+Razorpay popup → user pays → frontend sends signature to backend:
   POST /api/v1/payments/verify
-    HMAC check + slot expiry check
+    HMAC check + atomic slot expiry check (UPDATE ... WHERE slot_expires_at > now())
     UPDATE payments SET status='succeeded', razorpay_payment_id='pay_XYZ'
     UPDATE bookings SET status='confirmed', payment_id=P1
-    POST Calendly API → UPDATE bookings SET calendly_event_id, scheduled_at
+    Background: POST Calendly API → UPDATE bookings SET calendly_event_uri, scheduled_at
 
 Session completed:
   UPDATE bookings SET status='completed'
@@ -488,8 +500,9 @@ Session completed:
 | OAuth callback with `analysis_id` | `analyses` | UPDATE | `user_id = users.id` |
 | Check access status | `analyses` | READ; **or** Case E `DELETE` + READ when a stale unclaimed id is passed | — |
 | Create order (analysis) | `payments` | INSERT + UPDATE | `status='pending'`, `razorpay_order_id` |
-| Click Pay Now (consultation) | `bookings` | INSERT | `status='pending_payment'`, `slot_time`, `slot_expires_at` |
+| Click Pay Now (consultation) | `bookings` | INSERT | `status='pending_payment'`, `slot_time`, `slot_expires_at=+10min` |
 | Click Pay Now (consultation) | `payments` | INSERT + UPDATE | `status='pending'`, `razorpay_order_id` |
+| Exit Razorpay modal (consultation) | — | No DB write | slot expires via `slot_expires_at` after 10 min |
 | POST /payments/verify — analysis | `payments` | UPDATE | `status='succeeded'`, `razorpay_payment_id`, `razorpay_signature` |
 | POST /payments/verify — analysis | `analyses` | UPDATE | `paid=true` |
 | POST /payments/verify — consultation | `payments` | UPDATE | `status='succeeded'`, `razorpay_payment_id`, `razorpay_signature` |
@@ -622,20 +635,22 @@ The toast and discard happen **only** in this path (not on generic loads).
 | GET | `/api/v1/auth/google/callback` | No | UPSERT users · UPDATE/DELETE analyses · 302 (may include `?reclaimed_existing=1`) |
 | POST | `/api/v1/auth/google/logout` | Yes | — |
 
-### New endpoints (payment integration — pending)
+### Booking + payment endpoints (live)
 
 | Method | Path | Cookie required | DB write |
 |---|---|---|---|
-| GET | `/api/v1/services` | No | — |
-| GET | `/api/v1/bookings/available-slots` | Yes | — (Calendly proxy) |
-| POST | `/api/v1/bookings/reserve` | Yes | INSERT bookings (`status='pending_payment'`) |
-| POST | `/api/v1/bookings/{id}/expire` | Yes | UPDATE bookings + payments |
-| POST | `/api/v1/payments/create-order` | Yes | INSERT payments · UPDATE payments (`razorpay_order_id`) |
-| POST | `/api/v1/payments/verify` | Yes | UPDATE payments + bookings; INSERT Calendly event |
-| POST | `/api/v1/payments/fail` | Yes | UPDATE payments + bookings |
+| GET | `/api/v1/services/{service_key}/doctors` | No | — (doctors for a service) |
+| GET | `/api/v1/doctors/{doctor_service_id}/availability` | Yes | — (Calendly proxy) |
+| WS | `/api/v1/doctors/{doctor_service_id}/availability/ws` | Yes | — (real-time slot updates) |
+| POST | `/api/v1/bookings/reserve` | Yes | UPSERT slot_reservations (5-min soft lock) |
+| POST | `/api/v1/bookings/reserve/release` | Yes | DELETE slot_reservations |
+| POST | `/api/v1/payments/create-order` | Yes | INSERT bookings + payments; DELETE slot_reservations |
+| POST | `/api/v1/payments/cancel-order` | Yes | UPDATE bookings (`status='cancelled'`); WS broadcast |
+| POST | `/api/v1/payments/verify` | Yes | UPDATE bookings (`confirmed`) + payments (`succeeded`) |
 | POST | `/api/v1/payments/webhook/razorpay` | Razorpay-Signature | UPDATE payments + bookings (idempotent backup) |
 
-> Full flow and failure cases documented in `docs/payment-integration.md`.
+> Full flow and failure cases documented in `docs/payment-integration.md` and
+> `docs/multi-doctor-booking-system.md`.
 
 ---
 

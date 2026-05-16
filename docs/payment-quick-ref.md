@@ -43,8 +43,8 @@
 | `name` | VARCHAR(255) NOT NULL — display label |
 | `description` | TEXT DEFAULT `''` |
 | `duration_minutes` | INTEGER — NULL = analysis, NOT NULL = consultation |
-| `base_amount` | INTEGER NOT NULL — cents, 0 = TBD |
-| `currency` | VARCHAR(10) DEFAULT `'usd'` |
+| `base_amount` | INTEGER NOT NULL — paise (Razorpay minor unit for INR); 50000 = ₹500; 0 = TBD |
+| `currency` | VARCHAR(10) DEFAULT `'inr'` |
 | `is_active` | BOOLEAN DEFAULT `true` |
 
 No `category` or `calendly_event_type_uuid`. `duration_minutes IS NULL` identifies analysis services.
@@ -106,7 +106,7 @@ Effective price: `COALESCE(price_override, base_amount)`
 | `payment_id` | FK → payments — NULL until paid |
 | `status` | `pending_payment` · `confirmed` · `completed` · `cancelled` · `no_show` |
 | `slot_time` | TIMESTAMPTZ |
-| `slot_expires_at` | TIMESTAMPTZ — 15-min payment hold |
+| `slot_expires_at` | TIMESTAMPTZ — 10-min payment hold |
 | `scheduled_at` | TIMESTAMPTZ — set by Calendly |
 | `calendly_event_uri` | TEXT |
 | `calendly_invitee_uri` | TEXT |
@@ -125,7 +125,7 @@ Effective price: `COALESCE(price_override, base_amount)`
 | `razorpay_payment_id` | VARCHAR(255) UNIQUE |
 | `razorpay_signature` | VARCHAR(512) |
 | `amount` | INTEGER NOT NULL — snapshot |
-| `currency` | VARCHAR(10) DEFAULT `'usd'` |
+| `currency` | VARCHAR(10) DEFAULT `'inr'` |
 | `status` | `pending` · `succeeded` · `failed` · `expired` · `refunded` |
 | `metadata` | JSONB DEFAULT `'{}'` |
 
@@ -167,13 +167,18 @@ Frontend · Backend · PostgreSQL · Razorpay · Calendly
    POST /api/v1/payments/create-order { doctor_service_id, slot_time }
    Backend:
      Verify slot_reservation still valid for this user
-     INSERT bookings (status='pending_payment', slot_expires_at=now()+15min)
+     INSERT bookings (status='pending_payment', slot_expires_at=now()+10min)
      INSERT payments (status='pending', amount/currency snapshot)
-     POST razorpay /v1/orders { amount, currency, close_by=unix(slot_expires_at) }
+     POST razorpay /v1/orders { amount, currency="INR", close_by=unix(slot_expires_at) }
      UPDATE payments SET razorpay_order_id='order_ABC'
      DELETE slot_reservations WHERE id=SR1   ← booking is now the lock
    ← { order_id, amount, currency, booking_id, expires_at, razorpay_key }
-   Frontend: replaces 5-min timer with 15-min timer, opens Razorpay modal
+   Frontend: replaces 5-min timer with 10-min timer, opens Razorpay modal
+
+5a. User exits Razorpay modal without paying (ondismiss)
+   Frontend: redirect to /landing/booking/{serviceKey} — no API call
+   Slot stays held; slot_expires_at frees it after 10 min if no webhook arrives
+   Payment may still succeed via Razorpay webhook → booking confirmed automatically
 
 6. User pays in Razorpay popup
    Razorpay handler → { razorpay_payment_id, razorpay_order_id, razorpay_signature }
@@ -207,9 +212,10 @@ Frontend · Backend · PostgreSQL · Razorpay · Calendly
 |---|---|---|
 | **A** — card declined | Razorpay `payment.failed` | `payments='failed'` · `bookings='cancelled'` · redirect to services |
 | **B** — slot expired (timer) | Frontend countdown hits 0 | `bookings='cancelled'` · `payments='expired'` · redirect to calendar |
-| **C** — sig mismatch | HMAC check fails | 400 · rows stay pending · cleanup expires them |
-| **D** — paid after expiry | `close_by` passed | Razorpay rejects at gateway (no money moves). If it slips through: verify detects expired → immediate refund → 409 |
-| **E** — external Calendly booking | Slot gone at step 8 | Cancel booking · refund payment · notify user |
+| **C** — user exits modal | Razorpay `ondismiss` | Redirect to booking page only — slot expires automatically via `slot_expires_at` after 10 min |
+| **D** — sig mismatch | HMAC check fails | 400 · rows stay pending · cleanup expires them |
+| **E** — paid after expiry | `close_by` passed | Razorpay rejects at gateway (no money moves). If it slips through: verify detects expired → immediate refund → 409 |
+| **F** — external Calendly booking | Slot gone at step 8 | Cancel booking · refund payment · notify user |
 
 ---
 

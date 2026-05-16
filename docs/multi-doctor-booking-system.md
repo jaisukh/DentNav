@@ -37,7 +37,7 @@ CREATE TABLE services (
   description      TEXT          NOT NULL DEFAULT '',
   duration_minutes INTEGER,                             -- NULL → analysis (no calendar)
   base_amount      INTEGER       NOT NULL,              -- minor unit (cents)
-  currency         VARCHAR(10)   NOT NULL DEFAULT 'usd',
+  currency         VARCHAR(10)   NOT NULL DEFAULT 'inr',
   is_active        BOOLEAN       NOT NULL DEFAULT TRUE,
   created_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ   NOT NULL DEFAULT now()
@@ -57,13 +57,14 @@ CREATE TABLE services (
 
 ```sql
 INSERT INTO services (id, service_key, name, duration_minutes, base_amount, currency) VALUES
-  (gen_random_uuid(), 'analysis_access',       'Analysis Access',           NULL, 0, 'usd'),
-  (gen_random_uuid(), 'intro_consultation',    'Introductory Consultation',   45, 0, 'usd'),
-  (gen_random_uuid(), 'visa_consultation',     'Visa Consultation',           60, 0, 'usd'),
-  (gen_random_uuid(), 'interview_preparation', 'Interview Preparation',       60, 0, 'usd'),
-  (gen_random_uuid(), 'cv_sop_review',         'CV / SOP Review',             60, 0, 'usd'),
-  (gen_random_uuid(), 'caapid_assistance',     'CAAPID Assistance',           60, 0, 'usd'),
-  (gen_random_uuid(), 'license_guidance',      'License Guidance',            60, 0, 'usd');
+  (gen_random_uuid(), 'analysis_access',       'Analysis Access',           NULL,     0, 'inr'),
+  (gen_random_uuid(), 'intro_consultation',    'Introductory Consultation',   45, 50000, 'inr'),
+  (gen_random_uuid(), 'visa_consultation',     'Visa Consultation',           60, 50000, 'inr'),
+  (gen_random_uuid(), 'interview_preparation', 'Interview Preparation',       60, 50000, 'inr'),
+  (gen_random_uuid(), 'cv_sop_review',         'CV / SOP Review',             60, 50000, 'inr'),
+  (gen_random_uuid(), 'caapid_assistance',     'CAAPID Assistance',           60, 50000, 'inr'),
+  (gen_random_uuid(), 'license_guidance',      'License Guidance',            60, 50000, 'inr');
+-- base_amount is in paise (Razorpay minor unit): 50000 paise = ₹500
 ```
 
 ---
@@ -191,7 +192,7 @@ CREATE TABLE bookings (
   status                VARCHAR(50)   NOT NULL DEFAULT 'pending_payment',
     -- pending_payment | confirmed | completed | cancelled | no_show
   slot_time             TIMESTAMPTZ,                     -- chosen slot (UTC)
-  slot_expires_at       TIMESTAMPTZ,                     -- slot_time booking hold TTL (15 min)
+  slot_expires_at       TIMESTAMPTZ,                     -- slot_time booking hold TTL (10 min)
   scheduled_at          TIMESTAMPTZ,                     -- confirmed by Calendly
   calendly_event_uri    TEXT,                            -- full event URI from Calendly
   calendly_invitee_uri  TEXT,                            -- invitee URI for cancellations
@@ -393,7 +394,7 @@ The `doctor_services` row is the bridge that translates a business concept ("Vis
       1. Auth check → 401
       2. Verify slot_reservation exists for this user + DS1 + slot_time, not expired → 409
       3. Resolve effective price: COALESCE(ds.price_override, s.base_amount)
-      4. INSERT bookings (status='pending_payment', slot_expires_at=now()+15min)
+      4. INSERT bookings (status='pending_payment', slot_expires_at=now()+10min)
       5. INSERT payments (status='pending')
       6. POST Razorpay /v1/orders { amount, currency, receipt=P1.id,
                                      close_by=slot_expires_at as Unix ts }
@@ -402,8 +403,12 @@ The `doctor_services` row is the bridge that translates a business concept ("Vis
     ← { order_id: "order_ABC", amount, currency, booking_id: "B1", key: "rzp_live_..." }
 
     Frontend:
-      - Replaces 5-min timer with 15-min timer
+      - Replaces 5-min timer with 10-min timer
       - Opens Razorpay SDK modal
+      - If user exits the Razorpay modal (ondismiss):
+          → redirect to /landing/booking/{serviceKey} — no API call made
+          → slot_expires_at frees the slot automatically after 10 min
+          → payment may still succeed via Razorpay webhook; booking confirms if so
 
 [7] User completes payment in Razorpay modal
     Razorpay handler fires with { razorpay_payment_id, razorpay_order_id, razorpay_signature }
@@ -444,7 +449,7 @@ The `doctor_services` row is the bridge that translates a business concept ("Vis
 | Step | Table | Operation | Key columns |
 |---|---|---|---|
 | Reserve slot (step 5) | `slot_reservations` | UPSERT | `user_id`, `expires_at=+5min` |
-| Create order (step 6) | `bookings` | INSERT | `status='pending_payment'`, `slot_expires_at=+15min` |
+| Create order (step 6) | `bookings` | INSERT | `status='pending_payment'`, `slot_expires_at=+10min` |
 | Create order (step 6) | `payments` | INSERT | `status='pending'` |
 | Create order (step 6) | `payments` | UPDATE | `razorpay_order_id='order_ABC'` |
 | Create order (step 6) | `slot_reservations` | DELETE | hand off done |
@@ -455,6 +460,7 @@ The `doctor_services` row is the bridge that translates a business concept ("Vis
 | Payment failed | `bookings` | UPDATE | `status='cancelled'` |
 | Slot reservation expired | `slot_reservations` | DELETE (cleanup) | — |
 | Booking slot expired (step 7 atomic fail) | `payments` | UPDATE | `status='refunded'` |
+| Modal dismissed (Razorpay exit) | — | No DB write | slot expires via `slot_expires_at` after 10 min |
 | Manual cancel | `bookings` | UPDATE | `status='cancelled'` |
 
 ---
@@ -475,7 +481,7 @@ User B: tries to reserve DS1/10:00 at the same millisecond
 
 No application-level locking needed. PostgreSQL's UNIQUE constraint serialises concurrent inserts atomically.
 
-### 4.2 Layer 2 — Booking Confirmation (15-minute hard lock)
+### 4.2 Layer 2 — Booking Confirmation (10-minute hard lock)
 
 When the user pays, the atomic UPDATE in `POST /payments/verify` is the definitive lock:
 
@@ -650,7 +656,7 @@ Releases a slot reservation before the 5 minutes are up (user navigates back).
 
 ### 5.6 `POST /api/v1/payments/create-order`
 
-Promotes a slot reservation into a 15-minute booking hold and creates the Razorpay order.
+Promotes a slot reservation into a 10-minute booking hold and creates the Razorpay order.
 
 ```jsonc
 // Request
@@ -672,6 +678,33 @@ Promotes a slot reservation into a 15-minute booking hold and creates the Razorp
 // Response 409
 { "error": "reservation_expired", "message": "Your slot reservation expired. Please select a new slot." }
 ```
+
+---
+
+### 5.6.1 `POST /api/v1/payments/cancel-order`
+
+Explicitly cancels a `pending_payment` booking and frees the slot immediately (e.g. admin
+action or future explicit cancel UI). **Not called on Razorpay modal dismiss** — the slot
+expires automatically via `slot_expires_at` after 10 min, allowing the Razorpay webhook to
+still confirm the payment if it processes late.
+
+```jsonc
+// Request
+{ "booking_id": "uuid" }
+
+// Response 200 (idempotent — also 200 if booking not found / already cancelled)
+{ "ok": true }
+```
+
+Backend:
+1. Auth check — 401 if not signed in.
+2. Load booking WHERE `id = booking_id AND user_id = current_user AND status = 'pending_payment'`.
+3. If not found → return `{ ok: true }` (idempotent).
+4. `UPDATE bookings SET status='cancelled', updated_at=now()`.
+5. Broadcast slot as `'available'` via WebSocket to all connected clients.
+
+Frontend calls this from the Razorpay `ondismiss` callback, then redirects to
+`/landing/booking/{serviceKey}` (doctor selection page).
 
 ---
 

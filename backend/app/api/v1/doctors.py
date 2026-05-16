@@ -65,7 +65,7 @@ async def get_availability(
         return []
 
     try:
-        calendly_slots = await get_available_slots(
+        raw_slots = await get_available_slots(
             event_type_uri=ds.calendly_event_type_uri,
             pat=doctor.calendly_pat,
             start_time=effective_start,
@@ -76,6 +76,21 @@ async def get_availability(
         body = getattr(getattr(exc, "response", None), "text", "")
         logging.getLogger(__name__).error("Calendly availability error: %s | body: %s", exc, body)
         raise HTTPException(status_code=502, detail="Failed to fetch availability from Calendly")
+
+    # Calendly's "start time increment" setting may be shorter than the event duration
+    # (e.g. 30-min increments for a 45-min event). Drop any slot that starts within
+    # duration_minutes of the previous kept slot so the UI only shows valid windows.
+    duration_minutes = ds.service.duration_minutes
+    if duration_minutes:
+        calendly_slots: list[dict] = []
+        last_dt: datetime | None = None
+        for slot in raw_slots:
+            slot_dt = datetime.fromisoformat(slot["start_time"].replace("Z", "+00:00"))
+            if last_dt is None or (slot_dt - last_dt).total_seconds() >= duration_minutes * 60:
+                calendly_slots.append(slot)
+                last_dt = slot_dt
+    else:
+        calendly_slots = raw_slots
 
     # Confirmed bookings — permanently locked
     confirmed_result = await session.execute(

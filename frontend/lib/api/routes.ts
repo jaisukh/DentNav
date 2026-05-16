@@ -27,6 +27,8 @@ export const API_ROUTES = {
   reserveSlot: `${BACKEND_BASE_URL}/api/v1/bookings/reserve`,
   /** Release a reservation. */
   releaseSlot: `${BACKEND_BASE_URL}/api/v1/bookings/reserve/release`,
+  /** All bookings for the signed-in user. */
+  myBookings: `${BACKEND_BASE_URL}/api/v1/bookings/my`,
   /** Create a Razorpay order. */
   createOrder: `${BACKEND_BASE_URL}/api/v1/payments/create-order`,
   /** Verify payment after Razorpay modal completes. */
